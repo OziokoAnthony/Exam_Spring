@@ -371,6 +371,49 @@ model MasteryScore {
   @@map("mastery_scores")
 }
 
+model Cohort {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String?   @map("tenant_id") @db.Uuid
+  teacherId String    @map("teacher_id") @db.Uuid
+  name      String
+  joinCode  String    @unique @map("join_code")
+  examId    String    @map("exam_id") @db.Uuid
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  members CohortMember[]
+  assignments Assignment[]
+
+  @@map("cohorts")
+}
+
+model CohortMember {
+  cohortId  String   @map("cohort_id") @db.Uuid
+  learnerId String   @map("learner_id") @db.Uuid
+  joinedAt  DateTime @map("joined_at") @default(now()) @db.Timestamptz
+
+  cohort Cohort @relation(fields: [cohortId], references: [id])
+
+  @@id([cohortId, learnerId])
+  @@map("cohort_members")
+}
+
+model Assignment {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  cohortId     String   @map("cohort_id") @db.Uuid
+  teacherId    String   @map("teacher_id") @db.Uuid
+  title        String
+  objectiveIds Json     @map("objective_ids") @db.JsonB
+  dueAt        DateTime? @map("due_at") @db.Timestamptz
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  cohort Cohort @relation(fields: [cohortId], references: [id])
+
+  @@map("assignments")
+}
+
 model GuardianLink {
   id           String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   guardianId   String               @map("guardian_id") @db.Uuid

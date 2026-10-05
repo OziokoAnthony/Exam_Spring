@@ -120,6 +120,36 @@ export class AttemptsService {
     }
   }
 
+  async findByIdempotencyKey(key: string) {
+    return this.prisma.attempt.findUnique({ where: { idempotencyKey: key } });
+  }
+
+  async getSubject(subjectId: string) {
+    return this.prisma.subject.findUnique({ where: { id: subjectId } });
+  }
+
+  async createOfflineAttempt(input: {
+    learnerId: string;
+    subjectId: string;
+    mode: 'PRACTICE' | 'DIAGNOSTIC' | 'CBT';
+    idempotencyKey: string;
+    totalQuestions: number;
+  }) {
+    const subject = await this.prisma.subject.findUnique({ where: { id: input.subjectId } });
+    if (!subject) throw new Error('Subject not found');
+    return this.prisma.attempt.create({
+      data: {
+        learnerId: input.learnerId,
+        examId: subject.examId,
+        subjectId: input.subjectId,
+        mode: input.mode,
+        totalQuestions: input.totalQuestions,
+        idempotencyKey: input.idempotencyKey,
+        syncedFromOffline: true,
+      },
+    });
+  }
+
   async getMastery(learnerId: string) {
     return this.prisma.masteryScore.findMany({ where: { learnerId } });
   }

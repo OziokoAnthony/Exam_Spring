@@ -6,6 +6,8 @@ import { GlobalExceptionFilter } from './common/http-exception.filter';
 import { DatabaseModule } from './database/database.module';
 import { HealthController } from './health.controller';
 import { AuthModule } from './identity/auth.module';
+import { ParentModule } from './parent/parent.module';
+import { TeacherModule } from './teacher/teacher.module';
 import { AttemptsModule } from './attempts/attempts.module';
 import { ConsentModule } from './consent/consent.module';
 import { QuestionsModule } from './questions/questions.module';
@@ -23,6 +25,8 @@ import { RedisModule } from './redis/redis.module';
     QuestionsModule,
     AttemptsModule,
     CurriculumModule,
+    ParentModule,
+    TeacherModule,
   ],
   controllers: [HealthController],
   providers: [

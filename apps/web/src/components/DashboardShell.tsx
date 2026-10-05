@@ -2,6 +2,7 @@
 
 import { useAuthStore } from '@/stores/auth';
 import { api, setAccessToken } from '@/lib/api/client';
+import SyncBadge from '@/components/SyncBadge';
 import { useRouter } from 'next/navigation';
 
 export default function DashboardShell({ title }: { title: string }) {
@@ -31,6 +32,7 @@ export default function DashboardShell({ title }: { title: string }) {
         {user ? `Signed in as ${user.fullName} (${user.role})` : 'Not signed in'}
       </p>
       <p className="text-gray-600">Nothing here yet — this fills in on Day 6+.</p>
+      <SyncBadge />
     </main>
   );
 }

@@ -27,6 +27,38 @@ export class PracticeService {
     return best ? this.prisma.objective.findUnique({ where: { id: best.objectiveId } }) : null;
   }
 
+  async startCbt(learnerId: string, subjectId: string) {
+    const questions = await this.prisma.question.findMany({
+      where: { subjectId, status: 'APPROVED', deletedAt: null },
+      include: { currentVersion: true },
+      take: 200,
+    });
+    const picked = shuffle(questions).slice(0, 20);
+    const subject = await this.prisma.subject.findUnique({ where: { id: subjectId } });
+    if (!subject) throw new Error('Subject not found');
+    const attempt = await this.prisma.attempt.create({
+      data: {
+        learnerId,
+        examId: subject.examId,
+        subjectId,
+        mode: 'CBT',
+        totalQuestions: picked.length,
+        idempotencyKey: `cbt-${learnerId}-${Date.now()}`,
+      },
+    });
+    return {
+      attemptId: attempt.id,
+      durationMs: 25 * 60 * 1000,
+      questions: picked.map((q) => ({
+        id: q.id,
+        versionId: q.currentVersion?.id,
+        body: q.currentVersion?.body,
+        options: q.currentVersion?.options,
+        difficulty: q.difficulty,
+      })),
+    };
+  }
+
   async startPractice(learnerId: string, subjectId: string) {
     const objective = await this.recommendedObjective(learnerId, subjectId);
     const links = objective
@@ -63,4 +95,13 @@ export class PracticeService {
       })),
     };
   }
+}
+
+function shuffle<T>(items: T[]): T[] {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j]!, copy[i]!];
+  }
+  return copy;
 }

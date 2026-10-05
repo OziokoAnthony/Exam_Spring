@@ -47,6 +47,15 @@ export class AttemptsController {
     return ok(await this.attempts.getMastery(getAuthUser(req).id));
   }
 
+  @Post('cbt')
+  @UseGuards(JwtAuthGuard)
+  async startCbt(
+    @Body(new ZodPipe(StartSchema)) dto: z.infer<typeof StartSchema>,
+    @Req() req: Request,
+  ) {
+    return ok(await this.practice.startCbt(getAuthUser(req).id, dto.subjectId));
+  }
+
   @Post('practice')
   @UseGuards(JwtAuthGuard)
   async startPractice(
@@ -54,6 +63,50 @@ export class AttemptsController {
     @Req() req: Request,
   ) {
     return ok(await this.practice.startPractice(getAuthUser(req).id, dto.subjectId));
+  }
+
+  @Post('sync')
+  @UseGuards(JwtAuthGuard)
+  async syncOffline(
+    @Body()
+    body: {
+      attempts: {
+        idempotencyKey: string;
+        subjectId: string;
+        mode: 'PRACTICE' | 'DIAGNOSTIC' | 'CBT';
+        answers: { questionVersionId: string; response: string }[];
+      }[];
+    },
+    @Req() req: Request,
+  ) {
+    const learnerId = getAuthUser(req).id;
+    const results = [];
+    for (const offline of body.attempts ?? []) {
+      const existing = await this.attempts.findByIdempotencyKey(offline.idempotencyKey);
+      if (existing) {
+        results.push({ idempotencyKey: offline.idempotencyKey, status: 'ALREADY_SYNCED' });
+        continue;
+      }
+      const subject = await this.attempts.getSubject(offline.subjectId);
+      if (!subject) {
+        results.push({ idempotencyKey: offline.idempotencyKey, status: 'REJECTED' });
+        continue;
+      }
+      const attempt = await this.attempts.createOfflineAttempt({
+        learnerId,
+        subjectId: offline.subjectId,
+        mode: offline.mode,
+        idempotencyKey: offline.idempotencyKey,
+        totalQuestions: offline.answers.length,
+      });
+      const submitted = await this.attempts.submitAttempt(attempt.id, learnerId, offline.answers);
+      results.push({
+        idempotencyKey: offline.idempotencyKey,
+        status: 'SYNCED',
+        scorePct: submitted.scorePct,
+      });
+    }
+    return ok(results);
   }
 
   @Get(':id/review')
