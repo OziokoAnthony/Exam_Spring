@@ -1,0 +1,124 @@
+# ExamSpring Nigeria — Cursor Rules
+
+This project has a master specification at SKILL.md. Read it fully before
+writing any code. These rules are the condensed version.
+
+## Identity
+ExamSpring is a mobile-first, offline-capable exam-prep platform for Nigerian
+students. Supports 6 exams: FSLC, BECE, NECO, NABTEB, WAEC/JAMB, POST UTME.
+MVP launches with WAEC/JAMB Math + English only.
+
+## Non-Negotiables
+1. Child safety first — most users are minors
+2. NDPA compliance
+3. Content provenance — no scraped content
+4. Human review of all questions
+5. Deterministic scoring — AI never scores
+6. AI optional — product works without tutor
+7. Offline-capable
+8. No data selling
+
+## Tech Stack (Locked)
+- TypeScript strict everywhere. No `any`. No JS in src/
+- Frontend: Next.js 14 App Router, Tailwind, shadcn/ui, Zustand, RHF + Zod, TanStack Query, next-pwa, Dexie
+- Backend: NestJS, Node 20, REST + JSON, Zod, JWT + bcrypt, BullMQ, Pino, Sentry
+- DB: Postgres 15+, Prisma, RLS, pgcrypto + pg_trgm + citext
+- Cache: Redis (Upstash)
+- Storage: Cloudflare R2 + CDN
+- Payments: Paystack
+- Email: Resend + React Email
+- AI (Phase 2): OpenAI + pgvector, closed corpus only
+- Testing: Vitest + Playwright + Supertest
+- Deploy: Vercel + Railway/Fly + Upstash + R2 + GitHub Actions
+- Monorepo: pnpm + Turborepo
+
+## Architecture
+- Modular monolith. No microservices, no K8s, no GraphQL, no WebSockets
+- Backend modules: identity, curriculum, questions, attempts, mastery, content-packs, cohorts, reports, billing, notifications, audit, health
+- Frontend: app/(auth|learner|parent|teacher|admin), components/{ui,shared,features}, lib/{api,auth,offline,utils}
+- API base: /v1/. Response envelope: {success, data|error, meta}
+- Cursor pagination. Idempotency-Key on mutations
+- JWT access (15 min) + refresh (30d, httpOnly, rotated)
+- Roles: LEARNER, PARENT, TEACHER, ADMIN. Object-level authz in service layer
+- RLS on tenant-scoped tables
+- Transactional outbox for all external side effects
+- Immutable: attempts, attempt_items, mastery_events, audit_log, question_versions, payment_events
+
+## Coding Rules
+- Strict TS. No `any`, no `as` without reason, no non-null without check
+- Named exports only (except Next.js pages)
+- Absolute imports (@/, @app/)
+- Max file 400 lines. Max function 50 lines. Max 4 params. Max 4 nesting
+- No console.log. Use Pino (backend) or remove (frontend)
+- No commented-out code. No orphan TODOs
+- Zod validates all inputs and external data
+- All API calls via lib/api client. No raw fetch in components
+- Server Components by default
+- No N+1 queries. No `select: *`. No findMany/delete without where
+- No raw SQL except documented cases
+- No hardcoded config. Env vars only
+- No new dependencies without approval
+- Pin exact versions
+- Conventional Commits
+- PR < 500 lines
+
+## Security (Never Break)
+- Never trust the client
+- Every resource access checks ownership in the service layer
+- Every input validated with Zod
+- Every external response treated as untrusted
+- No PII in logs, URLs, or errors
+- No secrets in code
+- Rate limit every public endpoint
+- Idempotent every mutating endpoint
+- OWASP API Top 10 compliance
+- Child data is sacred
+
+## Child Safety & NDPA
+- Minors require guardian consent before activation
+- Data minimization — collect nothing you don't use
+- Every data subject right supported: access, rectification, erasure, restriction, portability, objection
+- Retention schedule enforced
+- Plain-language privacy notice
+- No marketing to minors. No trackers. No ads
+- Parent sees progress, not conversations
+- Lawyer reviews before public launch
+
+## AI Tutor (Phase 2)
+- Closed corpus only. No open web. No general knowledge
+- Citations required
+- Refusal is a feature (target 10–25% refusal rate)
+- Safety escalates immediately
+- Cost capped
+- Every interaction logged
+- Model changes tested with red-team suite
+- Kill switch required
+
+## Never Do (Top 20)
+1. Never use `any`
+2. Never `console.log`
+3. Never raw `fetch` in components
+4. Never skip authz on a resource
+5. Never log PII
+6. Never commit secrets
+7. Never edit merged migrations
+8. Never skip idempotency on mutations
+9. Never call external API in DB transaction
+10. Never add a dependency without approval
+11. Never build outside MVP scope
+12. Never let AI score answers
+13. Never let tutor use open web
+14. Never scrape exam content
+15. Never publish unreviewed questions
+16. Never skip tests on critical paths
+17. Never merge with failing CI
+18. Never deploy without staging test
+19. Never build a feature not in Section 2 of SKILL.md
+20. Never bypass SKILL.md rules without founder approval
+
+## Definition of Done
+Tested, reviewed, deployed, monitored, documented. All five. Plus:
+mobile verification, empty/loading/error states, rollback plan, observability.
+
+## When In Doubt
+Read SKILL.md. If still in doubt, ask the founder. Do not guess.
