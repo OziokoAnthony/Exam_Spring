@@ -125,6 +125,252 @@ model ConsentRecord {
   @@map("consent_records")
 }
 
+model OutboxEvent {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  aggregateType String   @map("aggregate_type")
+  aggregateId  String    @map("aggregate_id") @db.Uuid
+  eventType    String    @map("event_type")
+  payload      Json      @db.JsonB
+  status       OutboxStatus @default(PENDING)
+  attempts     Int       @default(0)
+  availableAt  DateTime  @map("available_at") @default(now()) @db.Timestamptz
+  processedAt  DateTime? @map("processed_at") @db.Timestamptz
+  lastError    String?   @map("last_error")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([status, availableAt])
+  @@map("outbox_events")
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+  DLQ
+}
+
+model Exam {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String   @unique
+  name        String
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  versions ExamVersion[]
+  subjects Subject[]
+
+  @@map("exams")
+}
+
+model ExamVersion {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  examId        String    @map("exam_id") @db.Uuid
+  versionLabel  String    @map("version_label")
+  effectiveFrom DateTime  @map("effective_from") @db.Date
+  effectiveTo   DateTime? @map("effective_to") @db.Date
+  sourceUrl     String?   @map("source_url")
+  sourceNotes   String?   @map("source_notes")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  exam     Exam      @relation(fields: [examId], references: [id])
+  subjects Subject[]
+
+  @@unique([examId, versionLabel])
+  @@map("exam_versions")
+}
+
+model Subject {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code           String
+  name           String
+  examId         String    @map("exam_id") @db.Uuid
+  examVersionId  String?   @map("exam_version_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  exam    Exam         @relation(fields: [examId], references: [id])
+  version ExamVersion? @relation(fields: [examVersionId], references: [id])
+  objectives Objective[]
+  questions Question[]
+
+  @@unique([examId, code])
+  @@map("subjects")
+}
+
+model Objective {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subjectId       String    @map("subject_id") @db.Uuid
+  code            String
+  description     String
+  parentObjectiveId String? @map("parent_objective_id") @db.Uuid
+  examWeight      Decimal   @default(1.0) @map("exam_weight") @db.Decimal(4, 3)
+  orderIndex      Int       @map("order_index")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  subject   Subject    @relation(fields: [subjectId], references: [id])
+  parent    Objective? @relation("ObjectiveTree", fields: [parentObjectiveId], references: [id])
+  children  Objective[] @relation("ObjectiveTree")
+  questionLinks QuestionObjective[]
+
+  @@unique([subjectId, code])
+  @@index([parentObjectiveId])
+  @@map("objectives")
+}
+
+enum QuestionStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  RETIRED
+}
+
+model Question {
+  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String?        @map("tenant_id") @db.Uuid
+  subjectId       String         @map("subject_id") @db.Uuid
+  type            String         @default("MCQ")
+  difficulty      Int
+  status          QuestionStatus @default(DRAFT)
+  currentVersionId String?       @unique @map("current_version_id") @db.Uuid
+  deletedAt       DateTime?      @map("deleted_at") @db.Timestamptz
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+
+  subject Subject @relation(fields: [subjectId], references: [id])
+  currentVersion QuestionVersion? @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+  versions QuestionVersion[] @relation("QuestionVersions")
+  objectives QuestionObjective[]
+
+  @@index([subjectId])
+  @@index([status])
+  @@map("questions")
+}
+
+model QuestionVersion {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  questionId  String    @map("question_id") @db.Uuid
+  version     Int
+  body        String
+  options     Json      @db.JsonB
+  answerKey   String    @map("answer_key")
+  explanation String
+  mediaUrls   Json      @default("[]") @map("media_urls") @db.JsonB
+  authoredBy  String    @map("authored_by") @db.Uuid
+  approvedBy  String?   @map("approved_by") @db.Uuid
+  approvedAt  DateTime? @map("approved_at") @db.Timestamptz
+  provenance  Json      @db.JsonB
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  question Question @relation("QuestionVersions", fields: [questionId], references: [id])
+  currentFor Question? @relation("CurrentVersion")
+
+  @@unique([questionId, version])
+  @@map("question_versions")
+}
+
+model QuestionObjective {
+  questionId  String  @map("question_id") @db.Uuid
+  objectiveId String  @map("objective_id") @db.Uuid
+  primary     Boolean @default(false)
+
+  question  Question  @relation(fields: [questionId], references: [id])
+  objective Objective @relation(fields: [objectiveId], references: [id])
+
+  @@id([questionId, objectiveId])
+  @@map("question_objectives")
+}
+
+model Attempt {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  learnerId       String    @map("learner_id") @db.Uuid
+  examId          String    @map("exam_id") @db.Uuid
+  subjectId       String    @map("subject_id") @db.Uuid
+  mode            AttemptMode
+  startedAt       DateTime  @map("started_at") @default(now()) @db.Timestamptz
+  submittedAt     DateTime? @map("submitted_at") @db.Timestamptz
+  totalQuestions  Int       @map("total_questions")
+  correctCount    Int?      @map("correct_count")
+  scorePct        Decimal?  @map("score_pct") @db.Decimal(5, 2)
+  durationMs      Int?      @map("duration_ms")
+  idempotencyKey  String    @unique @map("idempotency_key")
+  deviceId        String?   @map("device_id")
+  syncedFromOffline Boolean @default(false) @map("synced_from_offline")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  items AttemptItem[]
+
+  @@index([learnerId])
+  @@index([subjectId])
+  @@map("attempts")
+}
+
+enum AttemptMode {
+  DIAGNOSTIC
+  PRACTICE
+  CBT
+  ASSIGNMENT
+}
+
+model AttemptItem {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  attemptId         String    @map("attempt_id") @db.Uuid
+  questionId        String    @map("question_id") @db.Uuid
+  questionVersionId String    @map("question_version_id") @db.Uuid
+  response          String?
+  isCorrect         Boolean?  @map("is_correct")
+  timeMs            Int?      @map("time_ms")
+  answeredAt        DateTime? @map("answered_at") @db.Timestamptz
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  attempt Attempt @relation(fields: [attemptId], references: [id])
+
+  @@index([attemptId])
+  @@index([questionId])
+  @@map("attempt_items")
+}
+
+model MasteryEvent {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  learnerId          String   @map("learner_id") @db.Uuid
+  objectiveId        String   @map("objective_id") @db.Uuid
+  eventType          MasteryEventType @map("event_type")
+  delta              Decimal  @db.Decimal(5, 4)
+  sourceAttemptItemId String? @map("source_attempt_item_id") @db.Uuid
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([learnerId])
+  @@index([objectiveId])
+  @@map("mastery_events")
+}
+
+enum MasteryEventType {
+  ATTEMPT
+  DIAGNOSTIC
+  DECAY
+  MANUAL_ADJUST
+}
+
+model MasteryScore {
+  learnerId      String   @map("learner_id") @db.Uuid
+  objectiveId    String   @map("objective_id") @db.Uuid
+  score          Decimal  @db.Decimal(5, 4)
+  confidence     Decimal  @db.Decimal(5, 4)
+  attemptsCount  Int      @default(0) @map("attempts_count")
+  lastPracticedAt DateTime? @map("last_practiced_at") @db.Timestamptz
+  nextReviewDueAt DateTime? @map("next_review_due_at") @db.Timestamptz
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@id([learnerId, objectiveId])
+  @@map("mastery_scores")
+}
+
 model GuardianLink {
   id           String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   guardianId   String               @map("guardian_id") @db.Uuid
