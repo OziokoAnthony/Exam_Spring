@@ -1,0 +1,23 @@
+{
+  "services": {
+    "frontend": {
+      "root": "frontend",
+      "framework": "nextjs",
+      "installCommand": "pnpm install",
+      "buildCommand": "pnpm --filter @examspring/web build"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "frontend"
+      }
+    }
+  ],
+  "build": {
+    "env": {
+      "NEXT_PUBLIC_FRONTEND_URL": "/"
+    }
+  }
+}
