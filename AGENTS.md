@@ -157,7 +157,6 @@ criteria. Always work from the current sprint list.
 When in doubt, ask the founder. Do not guess. Do not creatively interpret
 rules. Do not build things not in scope. The SKILL.md is the contract.
 
-
 Read AGENTS.md in this repo.
 
 Then read SKILL.md (all sections).
@@ -165,8 +164,8 @@ Then read SKILL.md (all sections).
 We are starting Day 1 of 9. The goal for Day 1 is:
 
 1. Initialize a pnpm monorepo with Turborepo
-2. Create apps/web (Next.js 14 App Router, TypeScript, Tailwind)
-3. Create apps/api (NestJS, TypeScript)
+2. Create frontend (Next.js 14 App Router, TypeScript, Tailwind)
+3. Create backend (NestJS, TypeScript)
 4. Create packages/shared and packages/db
 5. Add ESLint, Prettier, Husky, lint-staged at the root
 6. Add docker-compose.yml with Postgres 15 and Redis 7

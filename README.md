@@ -4,8 +4,8 @@ Mobile-first, offline-capable exam-readiness platform for Nigerian students.
 
 ## Layout
 
-- `apps/web` — Next.js 14 PWA (port 3000)
-- `apps/api` — NestJS API (port 3001, `/v1/`)
+- `frontend` — Next.js 14 PWA (port 3000)
+- `backend` — NestJS API (port 3001, `/v1/`)
 - `packages/shared` — Zod schemas, types, constants
 - `packages/db` — Prisma schema, migrations, seed
 
@@ -26,7 +26,7 @@ Mobile-first, offline-capable exam-readiness platform for Nigerian students.
 ```powershell
 docker compose up -d
 pnpm install
-cp .env.example apps/api/.env   # adjust secrets
+cp .env.example backend/.env   # adjust secrets
 pnpm db:migrate
 pnpm db:seed
 pnpm dev

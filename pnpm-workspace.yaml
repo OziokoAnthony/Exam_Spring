@@ -1,6 +1,7 @@
 packages:
-  - "apps/*"
-  - "packages/*"
+  - 'frontend'
+  - 'backend'
+  - 'packages/*'
 allowBuilds:
   bcrypt: true
   '@prisma/client': true
@@ -9,3 +10,4 @@ allowBuilds:
   esbuild: true
   prisma: true
   '@prisma/engines': true
+  msgpackr-extract: true

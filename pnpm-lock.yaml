@@ -194,14 +194,14 @@ importers:
         specifier: 5.5.4
         version: 5.5.4
 
-  apps/api:
+  backend:
     dependencies:
       '@examspring/db':
         specifier: workspace:*
-        version: link:../../packages/db
+        version: link:../packages/db
       '@examspring/shared':
         specifier: workspace:*
-        version: link:../../packages/shared
+        version: link:../packages/shared
       '@nestjs/common':
         specifier: 10.4.1
         version: 10.4.1(reflect-metadata@0.2.2)(rxjs@7.8.1)
@@ -276,11 +276,11 @@ importers:
         specifier: 2.1.2
         version: 2.1.2(@types/node@20.16.5)(supports-color@8.1.1)(terser@5.51.2)
 
-  apps/web:
+  frontend:
     dependencies:
       '@examspring/shared':
         specifier: workspace:*
-        version: link:../../packages/shared
+        version: link:../packages/shared
       '@hookform/resolvers':
         specifier: 3.9.0
         version: 3.9.0(react-hook-form@7.53.0(react@18.3.1))

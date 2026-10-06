@@ -111,13 +111,16 @@ from Day 1.
 ## MVP IN SCOPE (Build This)
 
 ### 2.1 Users & Roles
+
 - Learner (student)
 - Parent/guardian (view-only progress)
 - Teacher (cohort + assignment management)
 - Admin (content review, platform operations)
 
 ### 2.2 Exams Supported (Data Model Level)
+
 The platform models all 6 exams from Day 1:
+
 1. FSLC
 2. BECE
 3. NECO
@@ -126,6 +129,7 @@ The platform models all 6 exams from Day 1:
 6. POST UTME
 
 Each exam has its own:
+
 - Syllabus structure
 - Subject list
 - Objective taxonomy
@@ -133,12 +137,14 @@ Each exam has its own:
 - Content rollout schedule
 
 Content rollout (staged):
+
 - **MVP launch:** WAEC/JAMB Math + English only
 - **Phase 2:** + BECE Math + English, + JAMB-specific rules
 - **Phase 3:** + NECO, + more subjects
 - **Phase 4:** + FSLC, NABTEB, POST UTME
 
 ### 2.3 Auth & Onboarding
+
 - Email + password signup (phone OTP is Phase 2)
 - Email verification
 - Role selection at signup
@@ -148,6 +154,7 @@ Content rollout (staged):
 - Learner selects exam(s) and target date during onboarding
 
 ### 2.4 Curriculum & Content
+
 - Curriculum model supports multiple exams, subjects, and objective trees
 - Initial content: WAEC/JAMB Mathematics + English
 - Question bank with:
@@ -167,6 +174,7 @@ Content rollout (staged):
 - ~40 seed questions minimum (human-authored, not AI)
 
 ### 2.5 Diagnostic Assessment
+
 - On first login, learner takes a diagnostic for their selected exam
 - 15 questions per subject, mixed difficulty
 - Server-side scoring
@@ -174,6 +182,7 @@ Content rollout (staged):
 - Shows learner: strong topics, weak topics, recommended next
 
 ### 2.6 Adaptive Practice Loop
+
 - Learner picks subject → sees recommended next objective
 - Recommendation logic (deterministic):
   - Weight = (1 - mastery) × exam_weight × recency_factor
@@ -184,18 +193,21 @@ Content rollout (staged):
 - Progress bar shows mastery growth
 
 ### 2.7 Timed CBT Simulation (Lite)
+
 - Learner picks subject → 20 questions, 25 minutes
 - Timer visible, auto-submit at 0
 - Navigation: next / prev / flag for review
 - Submit → server scores → shows result + review
 
 ### 2.8 Parent View
+
 - Parent linked to learner (via learner invite)
 - Sees: mastery by subject, study streak, last 7 days activity
 - Cannot see: individual answers, tutor conversations, PII beyond what's needed
 - Export progress report as PDF
 
 ### 2.9 Teacher View (Minimal)
+
 - Teacher creates a cohort
 - Invites learners via code
 - Sees cohort-level mastery heatmap
@@ -203,6 +215,7 @@ Content rollout (staged):
 - Sees completion + average mastery
 
 ### 2.10 Offline Mode (Basic — PWA)
+
 - Learner can "download" a subject pack (objectives + questions + explanations)
 - Stored in IndexedDB (Dexie)
 - Service worker handles offline routing
@@ -212,6 +225,7 @@ Content rollout (staged):
 - Low-data mode toggle (disables images > 100KB)
 
 ### 2.11 PWA Installation
+
 - Manifest + service worker
 - Installable on Android, iOS, and desktop browsers
 - Add-to-home-screen prompt after first successful practice
@@ -219,6 +233,7 @@ Content rollout (staged):
 - Push notifications deferred to Phase 2
 
 ### 2.12 Payments
+
 - Paystack integration
 - One plan: "Full Access" monthly
 - Free tier: diagnostic + 20 practice questions/day
@@ -227,6 +242,7 @@ Content rollout (staged):
 - Receipt email
 
 ### 2.13 Notifications (Email Only)
+
 - Welcome email
 - Weekly progress summary (learner + parent)
 - Payment receipt
@@ -234,6 +250,7 @@ Content rollout (staged):
 - SMS/WhatsApp deferred to Phase 2
 
 ### 2.14 Admin & Ops
+
 - Admin dashboard: users, questions, subscriptions
 - Content review queue
 - Basic metrics: signups, active learners, items answered, mastery gains
@@ -241,6 +258,7 @@ Content rollout (staged):
 - Uptime monitoring
 
 ### 2.15 Deployment & Infrastructure
+
 - Web app (Next.js PWA) on Vercel
 - API (NestJS) on Railway or Fly.io
 - Postgres (managed) on Railway / Supabase / Neon
@@ -258,6 +276,7 @@ The agent must refuse to build these, even if asked casually.
 They are Phase 2 or later.
 
 ### Content & Exams
+
 - ❌ Live content for FSLC, BECE, NECO, NABTEB, POST UTME
   (data model only; no content yet)
 - ❌ Subjects beyond Math and English at launch
@@ -266,6 +285,7 @@ They are Phase 2 or later.
 - ❌ Scraped or AI-generated questions (content is human-authored)
 
 ### AI Features
+
 - ❌ AI tutor (Phase 2 — needs approved corpus first)
 - ❌ AI-generated explanations
 - ❌ AI-generated questions
@@ -273,6 +293,7 @@ They are Phase 2 or later.
 - ❌ Voice/chat interface
 
 ### Platform
+
 - ❌ React Native / native mobile apps (Phase 2)
 - ❌ Desktop apps (Electron, etc.)
 - ❌ Kubernetes
@@ -283,6 +304,7 @@ They are Phase 2 or later.
 - ❌ Self-hosted infrastructure
 
 ### Features
+
 - ❌ School SSO
 - ❌ Parent-teacher chat
 - ❌ Gamification (badges, leaderboards)
@@ -308,7 +330,6 @@ When in doubt, cut. A smaller working MVP beats a larger broken one.
 
 The platform supports 6 exams. The MVP proves the loop with 1 exam's content.
 Everything else is staged.
-
 
 # 3. TECH STACK — LOCKED
 
@@ -520,8 +541,8 @@ platforms (Vercel, Railway, Upstash, R2) compose better.
 
 - **Tool:** pnpm workspaces + Turborepo
 - **Packages:**
-  - `apps/web` — Next.js PWA
-  - `apps/api` — NestJS backend
+  - `frontend` — Next.js PWA
+  - `backend` — NestJS backend
   - `packages/shared` — Zod schemas, types, constants
   - `packages/db` — Prisma schema + client
   - `packages/ui` — shared React components (optional, Phase 2)
@@ -580,8 +601,8 @@ any new file.
 
 ExamSpring is a **modular monolith**.
 
-- One backend application (`apps/api`)
-- One frontend application (`apps/web`)
+- One backend application (`backend`)
+- One frontend application (`frontend`)
 - Shared code in `packages/*`
 - One Postgres database
 - One Redis instance
@@ -599,13 +620,13 @@ Modular monolith gives clean boundaries without operational pain.
 
 The API is organized into modules. Each module owns its domain.
 
-
 # 5. DATA MODEL (REFERENCE)
 
 This section defines the core database entities. It is a reference, not the
 full Prisma schema. The actual schema lives in `packages/db/prisma/schema.prisma`.
 
 Rules:
+
 - All tables use `id` (UUID v4, default `gen_random_uuid()`)
 - All tables have `created_at` and `updated_at` (timestamptz, default `now()`)
 - Tenant-scoped tables have `tenant_id` (nullable for global data)
@@ -618,6 +639,7 @@ Rules:
 ## 5.1 Identity & Users
 
 ### users
+
 - `id` (uuid, pk)
 - `email` (citext, unique, not null)
 - `email_verified_at` (timestamptz, nullable)
@@ -635,6 +657,7 @@ Rules:
 Indexes: `email` (unique), `tenant_id`, `role`
 
 ### sessions
+
 - `id` (uuid, pk)
 - `user_id` (uuid, fk users, not null)
 - `refresh_token_hash` (text, not null)
@@ -648,6 +671,7 @@ Indexes: `email` (unique), `tenant_id`, `role`
 Indexes: `user_id`, `refresh_token_hash` (unique)
 
 ### password_resets
+
 - `id` (uuid, pk)
 - `user_id` (uuid, fk users, not null)
 - `token_hash` (text, unique, not null)
@@ -655,6 +679,7 @@ Indexes: `user_id`, `refresh_token_hash` (unique)
 - `used_at` (timestamptz, nullable)
 
 ### consent_records (NDPA)
+
 - `id` (uuid, pk)
 - `user_id` (uuid, fk users, not null) — the learner
 - `guardian_id` (uuid, fk users, nullable) — the consenting guardian
@@ -665,6 +690,7 @@ Indexes: `user_id`, `refresh_token_hash` (unique)
 - `policy_version` (text, not null)
 
 ### guardian_links
+
 - `id` (uuid, pk)
 - `guardian_id` (uuid, fk users, not null)
 - `learner_id` (uuid, fk users, not null)
@@ -679,6 +705,7 @@ Indexes: `guardian_id`, `learner_id`, unique (`guardian_id`, `learner_id`)
 ## 5.2 Tenancy
 
 ### tenants
+
 - `id` (uuid, pk)
 - `name` (text, not null)
 - `type` (enum: SCHOOL, TUTORIAL_CENTRE, PUBLISHER, OTHER)
@@ -687,6 +714,7 @@ Indexes: `guardian_id`, `learner_id`, unique (`guardian_id`, `learner_id`)
 - `settings` (jsonb, default '{}')
 
 ### tenant_memberships
+
 - `id` (uuid, pk)
 - `tenant_id` (uuid, fk tenants, not null)
 - `user_id` (uuid, fk users, not null)
@@ -700,6 +728,7 @@ Indexes: unique (`tenant_id`, `user_id`)
 ## 5.3 Curriculum
 
 ### exams
+
 - `id` (uuid, pk)
 - `code` (text, unique, not null) — FSLC, BECE, NECO, NABTEB, WAEC, JAMB, POST_UTME
 - `name` (text, not null)
@@ -707,6 +736,7 @@ Indexes: unique (`tenant_id`, `user_id`)
 - `is_active` (boolean, default true)
 
 ### exam_versions
+
 - `id` (uuid, pk)
 - `exam_id` (uuid, fk exams, not null)
 - `version_label` (text, not null) — e.g., "2025", "2024-syllabus"
@@ -718,6 +748,7 @@ Indexes: unique (`tenant_id`, `user_id`)
 Indexes: (`exam_id`, `version_label`) unique
 
 ### subjects
+
 - `id` (uuid, pk)
 - `code` (text, not null) — e.g., "MATH", "ENG"
 - `name` (text, not null)
@@ -727,6 +758,7 @@ Indexes: (`exam_id`, `version_label`) unique
 Indexes: (`exam_id`, `code`) unique
 
 ### objectives
+
 - `id` (uuid, pk)
 - `subject_id` (uuid, fk subjects, not null)
 - `code` (text, not null) — e.g., "MATH.ALG.01"
@@ -742,6 +774,7 @@ Indexes: (`subject_id`, `code`) unique, `parent_objective_id`
 ## 5.4 Question Bank
 
 ### questions
+
 - `id` (uuid, pk)
 - `tenant_id` (uuid, fk tenants, nullable) — null = global bank
 - `subject_id` (uuid, fk subjects, not null)
@@ -754,6 +787,7 @@ Indexes: (`subject_id`, `code`) unique, `parent_objective_id`
 Indexes: `subject_id`, `status`, `tenant_id`
 
 ### question_versions (immutable)
+
 - `id` (uuid, pk)
 - `question_id` (uuid, fk questions, not null)
 - `version` (int, not null)
@@ -770,6 +804,7 @@ Indexes: `subject_id`, `status`, `tenant_id`
 Indexes: unique (`question_id`, `version`)
 
 ### question_objectives (many-to-many)
+
 - `question_id` (uuid, fk questions, not null)
 - `objective_id` (uuid, fk objectives, not null)
 - `primary` (boolean, default false)
@@ -777,6 +812,7 @@ Indexes: unique (`question_id`, `version`)
 Primary key: (`question_id`, `objective_id`)
 
 ### question_stats (materialized, recomputed periodically)
+
 - `question_id` (uuid, pk, fk questions)
 - `n_attempts` (int, default 0)
 - `p_value` (numeric(4,3), nullable) — proportion correct
@@ -789,6 +825,7 @@ Primary key: (`question_id`, `objective_id`)
 ## 5.5 Content Packs
 
 ### content_packs
+
 - `id` (uuid, pk)
 - `exam_id` (uuid, fk exams, not null)
 - `subject_id` (uuid, fk subjects, not null)
@@ -803,6 +840,7 @@ Primary key: (`question_id`, `objective_id`)
 Indexes: (`exam_id`, `subject_id`, `version`) unique
 
 ### learner_pack_downloads
+
 - `id` (uuid, pk)
 - `learner_id` (uuid, fk users, not null)
 - `pack_id` (uuid, fk content_packs, not null)
@@ -817,6 +855,7 @@ Indexes: unique (`learner_id`, `pack_id`, `device_id`)
 ## 5.6 Attempts (Immutable)
 
 ### attempts
+
 - `id` (uuid, pk)
 - `learner_id` (uuid, fk users, not null)
 - `exam_id` (uuid, fk exams, not null)
@@ -836,6 +875,7 @@ Indexes: unique (`learner_id`, `pack_id`, `device_id`)
 Indexes: `learner_id`, `subject_id`, `submitted_at`
 
 ### attempt_items (immutable)
+
 - `id` (uuid, pk)
 - `attempt_id` (uuid, fk attempts, not null)
 - `question_id` (uuid, fk questions, not null)
@@ -853,6 +893,7 @@ Indexes: `attempt_id`, `question_id`
 ## 5.7 Mastery
 
 ### mastery_events (append-only)
+
 - `id` (uuid, pk)
 - `learner_id` (uuid, fk users, not null)
 - `objective_id` (uuid, fk objectives, not null)
@@ -864,6 +905,7 @@ Indexes: `attempt_id`, `question_id`
 Indexes: `learner_id`, `objective_id`, `created_at`
 
 ### mastery_scores (projection, rebuildable)
+
 - `learner_id` (uuid, fk users, not null)
 - `objective_id` (uuid, fk objectives, not null)
 - `score` (numeric(5,4), not null) — 0.0000 to 1.0000
@@ -880,6 +922,7 @@ Primary key: (`learner_id`, `objective_id`)
 ## 5.8 Cohorts & Assignments
 
 ### cohorts
+
 - `id` (uuid, pk)
 - `tenant_id` (uuid, fk tenants, nullable)
 - `teacher_id` (uuid, fk users, not null)
@@ -889,6 +932,7 @@ Primary key: (`learner_id`, `objective_id`)
 - `archived_at` (timestamptz, nullable)
 
 ### cohort_members
+
 - `cohort_id` (uuid, fk cohorts, not null)
 - `learner_id` (uuid, fk users, not null)
 - `joined_at` (timestamptz, not null)
@@ -896,6 +940,7 @@ Primary key: (`learner_id`, `objective_id`)
 Primary key: (`cohort_id`, `learner_id`)
 
 ### assignments
+
 - `id` (uuid, pk)
 - `cohort_id` (uuid, fk cohorts, not null)
 - `teacher_id` (uuid, fk users, not null)
@@ -909,6 +954,7 @@ Primary key: (`cohort_id`, `learner_id`)
 ## 5.9 Billing
 
 ### plans
+
 - `id` (uuid, pk)
 - `code` (text, unique, not null) — "FULL_ACCESS_MONTHLY"
 - `name` (text, not null)
@@ -917,6 +963,7 @@ Primary key: (`cohort_id`, `learner_id`)
 - `is_active` (boolean, default true)
 
 ### subscriptions
+
 - `id` (uuid, pk)
 - `user_id` (uuid, fk users, not null)
 - `plan_id` (uuid, fk plans, not null)
@@ -930,6 +977,7 @@ Primary key: (`cohort_id`, `learner_id`)
 Indexes: `user_id`, `status`
 
 ### payment_events (immutable)
+
 - `id` (uuid, pk)
 - `subscription_id` (uuid, fk subscriptions, nullable)
 - `provider_event_id` (text, unique, not null)
@@ -945,6 +993,7 @@ Indexes: `user_id`, `status`
 ## 5.10 Sync & Offline
 
 ### sync_log
+
 - `id` (uuid, pk)
 - `learner_id` (uuid, fk users, not null)
 - `device_id` (text, not null)
@@ -960,6 +1009,7 @@ Indexes: `user_id`, `status`
 ## 5.11 Audit & Compliance
 
 ### audit_log (append-only)
+
 - `id` (uuid, pk)
 - `actor_id` (uuid, fk users, nullable) — null for system
 - `action` (text, not null) — e.g., "question.approved", "user.deleted"
@@ -974,6 +1024,7 @@ Indexes: `user_id`, `status`
 Indexes: `actor_id`, `entity_type`, `entity_id`, `created_at`
 
 ### data_export_requests
+
 - `id` (uuid, pk)
 - `user_id` (uuid, fk users, not null)
 - `status` (enum: PENDING, PROCESSING, READY, FAILED, EXPIRED)
@@ -983,6 +1034,7 @@ Indexes: `actor_id`, `entity_type`, `entity_id`, `created_at`
 - `expires_at` (timestamptz, nullable)
 
 ### data_deletion_requests
+
 - `id` (uuid, pk)
 - `user_id` (uuid, fk users, not null)
 - `status` (enum: PENDING, PROCESSING, COMPLETED, FAILED)
@@ -995,6 +1047,7 @@ Indexes: `actor_id`, `entity_type`, `entity_id`, `created_at`
 ## 5.12 Outbox & Jobs
 
 ### outbox_events
+
 - `id` (uuid, pk)
 - `aggregate_type` (text, not null)
 - `aggregate_id` (uuid, not null)
@@ -1010,6 +1063,7 @@ Indexes: `actor_id`, `entity_type`, `entity_id`, `created_at`
 Indexes: `status`, `available_at`
 
 ### idempotency_keys
+
 - `key` (text, pk)
 - `user_id` (uuid, fk users, nullable)
 - `endpoint` (text, not null)
@@ -1023,6 +1077,7 @@ Indexes: `status`, `available_at`
 ## 5.13 Feature Flags
 
 ### feature_flags
+
 - `name` (text, pk)
 - `enabled` (boolean, default false)
 - `rollout_pct` (int, default 0)
@@ -1046,7 +1101,7 @@ Refreshed via BullMQ jobs on a schedule. Never queried in request path.
 Every tenant-scoped table (`questions`, `cohorts`, `assignments`,
 `tenant_memberships`) has RLS enabled with a policy like:
 
-```sql
+````sql
 CREATE POLICY tenant_isolation ON questions
   USING (tenant_id IS NULL OR tenant_id = current_setting('app.tenant_id')::uuid);
 
@@ -2972,8 +3027,8 @@ matching their role — deployed to staging.
 
 **Task 1 — Repo & Monorepo Setup**
 - Initialize pnpm workspace with Turborepo
-- Create `apps/web` (Next.js 14)
-- Create `apps/api` (NestJS)
+- Create `frontend` (Next.js 14)
+- Create `backend` (NestJS)
 - Create `packages/shared`, `packages/db`
 - Add ESLint, Prettier, Husky, lint-staged
 - Add `.cursorrules` and `CLAUDE.md` at root
@@ -3290,3 +3345,4 @@ A project that ignores its SKILL.md is worse — it pretends to have
 discipline while having none.
 
 Read it. Follow it. Update it when it's wrong. Never bypass it.
+````
