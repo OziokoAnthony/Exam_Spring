@@ -21,6 +21,18 @@ Mobile-first, offline-capable exam-readiness platform for Nigerian students.
 - Day 8: practice loop — deterministic recommendation, practice session, submission, explanation review
 - Day 9: polish + demo (this README)
 
+## Post-Day-9 additions (committed)
+
+- Cohorts & assignments, parent + teacher APIs (`backend/src/parent`, `backend/src/teacher`)
+- CBT timer, offline sync (Dexie), admin questions console
+- Seed for all 6 exams (FSLC, BECE, NECO, NABTEB, WAEC/JAMB, POST_UTME) + WAEC English
+
+## Docs
+
+- ADRs: `docs/adr/` (monorepo, NestJS, Prisma, JWT auth, outbox)
+- Compliance: `docs/compliance/ropa.md` (ROPA skeleton, lawyer review before launch)
+- API: `backend/README.md` · Web: `frontend/README.md`
+
 ## Run locally
 
 ```powershell
@@ -47,4 +59,6 @@ pnpm --filter @examspring/api test
 
 - Resend live key, Sentry DSN, Vercel/Railway/GitHub deploy secrets
 - Founder-authored real question bank (currently placeholders)
-- Day 10+ polish: offline packs, CBT timer, parent/teacher features, payments
+- Payments (Paystack), AI tutor (Phase 2), staging deploy verification
+- Row-level security policies on tenant-scoped tables (RLS hardening)
+- Sentry/Pino wiring needs real DSN/keys from the founder
