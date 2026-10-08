@@ -7,6 +7,7 @@ import { PRISMA } from '../database/database.module';
 import { loadEnv } from '../config/env';
 import { EmailService } from '../mail/email.service';
 import { renderEmail } from '../mail/templates';
+import { redactPii } from '../common/redact';
 
 const QUEUE = 'outbox';
 
@@ -68,7 +69,12 @@ export class OutboxService {
       });
     } catch (error) {
       this.logger.error(
-        `Outbox ${event.id} failed`,
+        `Outbox ${event.id} failed: ${JSON.stringify(
+          redactPii({
+            payload: event.payload,
+            error: error instanceof Error ? error.message : String(error),
+          }),
+        )}`,
         error instanceof Error ? error.stack : String(error),
       );
       await this.prisma.outboxEvent.update({

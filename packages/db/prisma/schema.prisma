@@ -65,6 +65,7 @@ model User {
   guardianConsents ConsentRecord[] @relation("GuardianConsent")
   guardianLinks  GuardianLink[] @relation("GuardianUser")
   learnerLinks   GuardianLink[] @relation("LearnerUser")
+  paymentOrders PaymentOrder[]
 
   @@index([tenantId])
   @@index([role])
@@ -196,6 +197,7 @@ model Subject {
   version ExamVersion? @relation(fields: [examVersionId], references: [id])
   objectives Objective[]
   questions Question[]
+  contentPacks ContentPack[]
 
   @@unique([examId, code])
   @@map("subjects")
@@ -412,6 +414,71 @@ model Assignment {
   cohort Cohort @relation(fields: [cohortId], references: [id])
 
   @@map("assignments")
+}
+
+enum ContentPackStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model ContentPack {
+  id           String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subjectId    String            @map("subject_id") @db.Uuid
+  version      Int
+  name         String
+  status       ContentPackStatus @default(DRAFT)
+  storageKey   String?           @map("storage_key")
+  sizeBytes    Int?              @map("size_bytes")
+  questionCount Int              @default(0) @map("question_count")
+  publishedAt  DateTime?         @map("published_at") @db.Timestamptz
+  createdAt    DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime          @updatedAt @map("updated_at") @db.Timestamptz
+
+  subject Subject @relation(fields: [subjectId], references: [id])
+
+  @@unique([subjectId, version])
+  @@map("content_packs")
+}
+
+enum PaymentOrderStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+model PaymentOrder {
+  id           String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String             @map("user_id") @db.Uuid
+  amountKobo   Int                @map("amount_kobo")
+  currency     String             @default("NGN")
+  status       PaymentOrderStatus @default(PENDING)
+  reference    String             @unique
+  plan         String
+  paidAt       DateTime?          @map("paid_at") @db.Timestamptz
+  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime           @updatedAt @map("updated_at") @db.Timestamptz
+
+  user   User           @relation(fields: [userId], references: [id])
+  events PaymentEvent[]
+
+  @@index([userId])
+  @@map("payment_orders")
+}
+
+model PaymentEvent {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderId         String   @map("order_id") @db.Uuid
+  provider        String
+  providerEventId String   @map("provider_event_id")
+  payload         Json     @db.JsonB
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  order PaymentOrder @relation(fields: [orderId], references: [id])
+
+  @@unique([provider, providerEventId])
+  @@map("payment_events")
 }
 
 model GuardianLink {

@@ -2,6 +2,7 @@ import 'reflect-metadata';
 
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import 'dotenv/config';
@@ -10,8 +11,9 @@ import { AppModule } from './app.module';
 import { loadEnv } from './config/env';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.setGlobalPrefix('v1');
+  app.useBodyParser('json', { limit: '100kb' });
   app.use(cookieParser());
   app.use(helmet());
   app.enableCors({ origin: loadEnv().WEB_ORIGIN, credentials: true });
