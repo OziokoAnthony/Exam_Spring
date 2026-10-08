@@ -5,9 +5,28 @@
       "framework": "nextjs",
       "installCommand": "pnpm install",
       "buildCommand": "pnpm --filter @examspring/web build"
+    },
+    "backend": {
+      "root": "backend",
+      "framework": "node",
+      "entrypoint": "api/index.ts",
+      "installCommand": "npm install",
+      "buildCommand": "pnpm --filter @examspring/shared build && pnpm --filter @examspring/db generate && pnpm --filter @examspring/db build",
+      "rewrites": [
+        {
+          "source": "/api/:path(.*)?",
+          "destination": "/:path"
+        }
+      ]
     }
   },
   "rewrites": [
+    {
+      "source": "/api(/.*)?",
+      "destination": {
+        "service": "backend"
+      }
+    },
     {
       "source": "/(.*)",
       "destination": {
@@ -17,7 +36,8 @@
   ],
   "build": {
     "env": {
-      "NEXT_PUBLIC_FRONTEND_URL": "/"
+      "NEXT_PUBLIC_FRONTEND_URL": "/",
+      "NEXT_PUBLIC_BACKEND_URL": "/api"
     }
   }
 }

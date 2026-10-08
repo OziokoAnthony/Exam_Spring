@@ -80,6 +80,15 @@ export class OutboxService {
 
   private connection() {
     const url = new URL(loadEnv().REDIS_URL);
-    return { host: url.hostname, port: Number(url.port || 6379) };
+    const base: Record<string, unknown> = {
+      host: url.hostname,
+      port: Number(url.port || 6379),
+    };
+    if (url.username) base.username = url.username;
+    if (url.password) base.password = url.password;
+    if (url.protocol === 'rediss:') {
+      base.tls = {};
+    }
+    return base;
   }
 }
