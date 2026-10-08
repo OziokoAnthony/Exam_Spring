@@ -11,12 +11,23 @@ export type OfflineAttempt = {
   queuedAt: number;
 };
 
+export type OfflinePack = {
+  id: string;
+  subjectId: string;
+  version: number;
+  name: string;
+  downloadedAt: number;
+  manifest: unknown;
+};
+
 class ExamSpringDb extends Dexie {
   offlineAttempts!: Table<OfflineAttempt, string>;
+  contentPacks!: Table<OfflinePack, string>;
 
   constructor() {
     super('examspring');
     this.version(1).stores({ offlineAttempts: 'idempotencyKey' });
+    this.version(2).stores({ offlineAttempts: 'idempotencyKey', contentPacks: 'id' });
   }
 }
 

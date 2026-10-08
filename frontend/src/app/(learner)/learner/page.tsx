@@ -14,6 +14,15 @@ export default function LearnerDashboard() {
         <a href="/learner/cbt" className="rounded bg-black px-4 py-3 text-white">
           CBT Simulation
         </a>
+        <a href="/learner/packs" className="rounded bg-black px-4 py-3 text-white">
+          Offline packs
+        </a>
+        <a href="/learner/report" className="rounded bg-black px-4 py-3 text-white">
+          My report
+        </a>
+        <a href="/learner/billing" className="rounded bg-black px-4 py-3 text-white">
+          Billing
+        </a>
       </nav>
     </>
   );

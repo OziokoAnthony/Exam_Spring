@@ -19,6 +19,7 @@ import { RedisModule } from './redis/redis.module';
 import { ContentPacksModule } from './content-packs/content-packs.module';
 import { BillingModule } from './billing/billing.module';
 import { ReportsModule } from './reports/reports.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { ReportsModule } from './reports/reports.module';
     ContentPacksModule,
     BillingModule,
     ReportsModule,
+    NotificationsModule,
   ],
   controllers: [HealthController],
   providers: [
