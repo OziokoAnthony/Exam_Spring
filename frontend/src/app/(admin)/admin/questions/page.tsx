@@ -32,9 +32,42 @@ export default function AdminQuestionsPage() {
     );
   }
 
+  const [importText, setImportText] = useState('');
+  const [importResult, setImportResult] = useState('');
+
+  async function bulkImport() {
+    setImportResult('');
+    try {
+      const parsed = JSON.parse(importText) as unknown;
+      const res = await api<{ createdCount: number; failed: { index: number }[] }>(
+        '/questions/bulk',
+        {
+          method: 'POST',
+          body: JSON.stringify(parsed),
+        },
+      );
+      setImportResult(`Imported ${res.createdCount}, failed ${res.failed.length}`);
+    } catch (e) {
+      setImportResult(e instanceof Error ? e.message : 'Invalid payload');
+    }
+  }
+
   return (
     <main className="flex min-h-screen flex-col gap-4 p-4">
       <h1 className="text-xl font-semibold">Question review queue</h1>
+      <details className="rounded border p-3">
+        <summary className="cursor-pointer font-medium">Bulk import (JSON)</summary>
+        <textarea
+          value={importText}
+          onChange={(e) => setImportText(e.target.value)}
+          className="mt-2 h-40 w-full rounded border p-2 font-mono text-xs"
+          placeholder='{"questions":[{...}]}'
+        />
+        <button onClick={bulkImport} className="mt-2 rounded bg-black px-4 py-2 text-white">
+          Import
+        </button>
+        {importResult && <p className="mt-2 text-sm text-gray-700">{importResult}</p>}
+      </details>
       <select
         value={status}
         onChange={(e) => setStatus(e.target.value)}

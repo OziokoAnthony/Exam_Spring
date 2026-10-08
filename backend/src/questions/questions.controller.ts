@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Inject, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ForbiddenException } from '@nestjs/common';
 import type { Request } from 'express';
+import { z } from 'zod';
 
 import { CreateQuestionSchema, QuestionsService } from './questions.service';
 import { getAuthUser, JwtAuthGuard } from '../common/jwt-auth.guard';
@@ -36,6 +37,17 @@ export class QuestionsController {
   ) {
     const user = requireAdmin(req);
     return ok(await this.questions.create(dto, user.id));
+  }
+
+  @Post('bulk')
+  @UseGuards(JwtAuthGuard)
+  async bulk(
+    @Body(new ZodPipe(z.object({ questions: z.array(CreateQuestionSchema).max(200) })))
+    dto: { questions: Parameters<QuestionsService['create']>[0][] },
+    @Req() req: Request,
+  ) {
+    const user = requireAdmin(req);
+    return ok(await this.questions.createBulk(dto.questions, user.id));
   }
 
   @Post(':id/versions')

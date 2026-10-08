@@ -89,6 +89,22 @@ export class QuestionsService {
     return question;
   }
 
+  async createBulk(dtos: CreateQuestion[], authorId: string) {
+    const created: string[] = [];
+    const failed: { index: number; message: string }[] = [];
+    for (let i = 0; i < dtos.length; i += 1) {
+      const item = dtos[i];
+      if (!item) continue;
+      try {
+        const q = await this.create(item, authorId);
+        created.push(q.id);
+      } catch (e) {
+        failed.push({ index: i, message: e instanceof Error ? e.message : 'unknown' });
+      }
+    }
+    return { createdCount: created.length, failed };
+  }
+
   async createVersion(questionId: string, dto: CreateQuestion, authorId: string) {
     const latest = await this.prisma.questionVersion.findFirst({
       where: { questionId },
