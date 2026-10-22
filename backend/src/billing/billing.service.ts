@@ -1,4 +1,11 @@
-import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadGatewayException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { Prisma } from '@examspring/db';
 import type { PrismaClient } from '@examspring/db';
@@ -14,6 +21,28 @@ const PLAN_AMOUNT_KOBO: Record<Plan, number> = {
   ANNUAL: 4000000,
 };
 
+const InitializeResponseSchema = z.object({
+  status: z.boolean(),
+  data: z.object({ authorization_url: z.string().url() }),
+});
+
+const PAYSTACK_TIMEOUT_MS = 10_000;
+
+function paystackSecret(): string {
+  return process.env.PAYSTACK_SECRET_KEY ?? '';
+}
+
+/** Constant-time HMAC-SHA512 check over the exact bytes Paystack sent. */
+export function isValidPaystackSignature(
+  rawBody: Buffer,
+  signature: string | undefined,
+  secret: string,
+): boolean {
+  const expected = Buffer.from(createHmac('sha512', secret).update(rawBody).digest('hex'));
+  const received = Buffer.from(signature ?? '');
+  return expected.length === received.length && timingSafeEqual(expected, received);
+}
+
 const WebhookPayloadSchema = z
   .object({
     event: z.string(),
@@ -21,6 +50,8 @@ const WebhookPayloadSchema = z
       .object({
         id: z.union([z.string(), z.number()]),
         reference: z.string(),
+        amount: z.number().int(),
+        currency: z.string(),
       })
       .passthrough(),
   })
@@ -59,22 +90,13 @@ export class BillingService {
     return order;
   }
 
-  async handlePaystackWebhook(body: unknown, signature: string | undefined) {
-    // NOTE: Nest is configured with parsed JSON globally, so we verify the
-    // HMAC-SHA512 of JSON.stringify(body) rather than the raw request bytes.
-    // In production prefer a raw-body parser (express json `verify`) so the
-    // signature is computed over the exact payload Paystack sent.
-    const secret = process.env.PAYSTACK_SECRET_KEY ?? '';
-    if (secret) {
-      const expected = createHmac('sha512', secret).update(JSON.stringify(body)).digest('hex');
-      const received = signature ?? '';
-      const a = Buffer.from(expected);
-      const b = Buffer.from(received);
-      if (a.length !== b.length || !timingSafeEqual(a, b)) {
-        throw new ForbiddenException('Invalid signature');
-      }
+  async handlePaystackWebhook(rawBody: Buffer | undefined, signature: string | undefined) {
+    const secret = paystackSecret();
+    if (!secret) throw new ServiceUnavailableException('Payments are not configured');
+    if (!rawBody || !isValidPaystackSignature(rawBody, signature, secret)) {
+      throw new ForbiddenException('Invalid signature');
     }
-
+    const body: unknown = JSON.parse(rawBody.toString('utf8'));
     const parsed = WebhookPayloadSchema.safeParse(body);
     if (!parsed.success) return { received: true, ignored: true };
     const { event, data } = parsed.data;
@@ -84,19 +106,25 @@ export class BillingService {
       where: { reference: data.reference },
     });
     if (!order) return { received: true, ignored: true };
+    if (data.amount !== order.amountKobo || data.currency !== order.currency) {
+      return { received: true, ignored: true, reason: 'amount_mismatch' };
+    }
+    return this.recordPayment(order.id, String(data.id), body);
+  }
 
+  private async recordPayment(orderId: string, providerEventId: string, body: unknown) {
     try {
       await this.prisma.$transaction([
         this.prisma.paymentEvent.create({
           data: {
-            orderId: order.id,
+            orderId,
             provider: 'paystack',
-            providerEventId: String(data.id),
+            providerEventId,
             payload: body as Prisma.InputJsonValue,
           },
         }),
-        this.prisma.paymentOrder.update({
-          where: { id: order.id },
+        this.prisma.paymentOrder.updateMany({
+          where: { id: orderId, status: 'PENDING' },
           data: { status: 'PAID', paidAt: new Date() },
         }),
       ]);
@@ -110,7 +138,7 @@ export class BillingService {
   }
 
   private async initializeTransaction(userId: string, reference: string, amountKobo: number) {
-    const secret = process.env.PAYSTACK_SECRET_KEY ?? '';
+    const secret = paystackSecret();
     if (!secret) return `https://checkout.paystack.com/mock/${reference}`;
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
@@ -123,10 +151,12 @@ export class BillingService {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ email: user.email, amount: amountKobo, reference }),
+      signal: AbortSignal.timeout(PAYSTACK_TIMEOUT_MS),
     });
-    const json = (await res.json()) as { status?: boolean; data?: { authorization_url?: string } };
-    const url = json.data?.authorization_url;
-    if (!res.ok || !url) throw new Error('Paystack initialize failed');
-    return url;
+    const parsed = InitializeResponseSchema.safeParse(await res.json());
+    if (!res.ok || !parsed.success || !parsed.data.status) {
+      throw new BadGatewayException('Payment provider unavailable');
+    }
+    return parsed.data.data.authorization_url;
   }
 }
