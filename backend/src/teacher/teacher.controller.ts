@@ -21,6 +21,7 @@ import { PRISMA } from '../database/database.module';
 import { getAuthUser, JwtAuthGuard } from '../common/jwt-auth.guard';
 import { ok } from '../common/envelope';
 import { ZodPipe } from '../common/zod.pipe';
+import { cohortSummary } from './cohort-summary';
 
 const CreateCohortSchema = z.object({
   name: z.string().min(1).max(120),
@@ -92,17 +93,7 @@ export class TeacherController {
     });
     if (!cohort || (cohort.teacherId !== user.id && user.role !== 'ADMIN'))
       throw new NotFoundException('Cohort not found');
-    const averages = await this.prisma.masteryScore.groupBy({
-      by: ['learnerId'],
-      where: { learnerId: { in: cohort.members.map((m) => m.learnerId) } },
-      _avg: { score: true },
-    });
-    const byLearner = new Map(averages.map((a) => [a.learnerId, Number(a._avg.score ?? 0)]));
-    const memberScores = cohort.members.map((m) => ({
-      learnerId: m.learnerId,
-      averageMastery: byLearner.get(m.learnerId) ?? 0,
-    }));
-    return ok({ cohort, memberScores });
+    return ok(await cohortSummary(this.prisma, cohort));
   }
 
   @Post('cohorts/:id/assignments')

@@ -16,16 +16,14 @@ const password = 'password123';
 
 async function signupMinor(app: NestExpressApplication, guardianEmail?: string) {
   const email = uniqueEmail('minor');
-  const res = await api(app)
-    .post('/v1/auth/signup')
-    .send({
-      email,
-      password,
-      fullName: 'Young Learner',
-      role: 'LEARNER',
-      dateOfBirth: MINOR_DOB,
-      guardianEmail,
-    });
+  const res = await api(app).post('/v1/auth/signup').send({
+    email,
+    password,
+    fullName: 'Young Learner',
+    role: 'LEARNER',
+    dateOfBirth: MINOR_DOB,
+    guardianEmail,
+  });
   const login = await api(app).post('/v1/auth/login').send({ email, password });
   return {
     id: res.body.data.user.id as string,

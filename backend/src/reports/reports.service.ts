@@ -2,6 +2,7 @@ import { Inject, Injectable, ForbiddenException, NotFoundException } from '@nest
 import type { PrismaClient } from '@examspring/db';
 
 import { PRISMA } from '../database/database.module';
+import { guardianSummary } from './guardian-summary';
 
 @Injectable()
 export class ReportsService {
@@ -67,11 +68,6 @@ export class ReportsService {
       where: { guardianId, learnerId, status: 'ACTIVE' },
     });
     if (!link && role !== 'ADMIN') throw new ForbiddenException('Not your learner');
-    const mastery = await this.prisma.masteryScore.findMany({ where: { learnerId } });
-    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const last7DaysAnswers = await this.prisma.attemptItem.count({
-      where: { answeredAt: { gte: since }, attempt: { learnerId } },
-    });
-    return { mastery, last7DaysAnswers };
+    return guardianSummary(this.prisma, learnerId);
   }
 }

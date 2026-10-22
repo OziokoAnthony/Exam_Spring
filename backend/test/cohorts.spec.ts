@@ -90,7 +90,13 @@ describe('Teacher cohorts, parent view and reports', () => {
   it('summarises only the owning teacher’s cohort', async () => {
     const own = await api(app).get(`/v1/teacher/cohorts/${cohortId}/summary`).set(as(teacher));
     expect(own.status).toBe(200);
-    expect(own.body.data.memberScores[0].averageMastery).toBeGreaterThan(0.5);
+    expect(own.body.data.members[0]).toMatchObject({
+      learnerId: learner.id,
+      fullName: 'Test LEARNER',
+    });
+    expect(own.body.data.members[0].averageMastery).toBeGreaterThan(0.5);
+    expect(own.body.data.cells).toHaveLength(2);
+    expect(own.body.data.objectives).toHaveLength(2);
     const otherTeacher = await createUser('TEACHER');
     const foreign = await api(app)
       .get(`/v1/teacher/cohorts/${cohortId}/summary`)
@@ -104,6 +110,12 @@ describe('Teacher cohorts, parent view and reports', () => {
       .set(as(teacher))
       .send({ title: 'Week 1', objectiveIds: curriculum.objectiveIds });
     expect(ok.status).toBe(201);
+    const summary = await api(app).get(`/v1/teacher/cohorts/${cohortId}/summary`).set(as(teacher));
+    expect(summary.body.data.assignments[0]).toMatchObject({
+      title: 'Week 1',
+      completedCount: 0,
+      memberCount: 1,
+    });
     const bad = await api(app)
       .post(`/v1/teacher/cohorts/${cohortId}/assignments`)
       .set(as(teacher))
@@ -127,6 +139,11 @@ describe('Teacher cohorts, parent view and reports', () => {
     expect(children.body.data).toEqual([expect.objectContaining({ id: learner.id })]);
     const summary = await api(app).get(`/v1/parent/children/${learner.id}/summary`).set(as(parent));
     expect(summary.body.data.last7DaysAnswers).toBe(2);
+    expect(summary.body.data.streakDays).toBe(1);
+    expect(summary.body.data.mastery).toEqual([
+      expect.objectContaining({ subjectId: curriculum.subjectId, objectives: 2 }),
+    ]);
+    expect(JSON.stringify(summary.body.data)).not.toMatch(/response|answerKey/);
     const report = await api(app).get(`/v1/reports/parent/children/${learner.id}`).set(as(parent));
     expect(report.status).toBe(200);
     const stranger = await createUser('PARENT');

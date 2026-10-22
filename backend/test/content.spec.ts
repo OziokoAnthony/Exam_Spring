@@ -37,6 +37,8 @@ describe('Curriculum and content packs', () => {
     expect(subjects.body.data).toEqual([expect.objectContaining({ id: curriculum.subjectId })]);
     const objectives = await api(app).get(`/v1/objectives?subjectId=${curriculum.subjectId}`);
     expect(objectives.body.data).toHaveLength(3);
+    const byExam = await api(app).get(`/v1/objectives?examId=${curriculum.examId}`);
+    expect(byExam.body.data).toHaveLength(3);
     const bad = await api(app).get('/v1/objectives?subjectId=nope');
     expect(bad.status).toBe(400);
   });
@@ -70,6 +72,11 @@ describe('Curriculum and content packs', () => {
 
     const manifest = await api(app).get(`/v1/content-packs/${id}/manifest`).set(as(learner));
     expect(manifest.body.data.questions).toHaveLength(3);
+    expect(manifest.body.data.questions[0]).toMatchObject({
+      versionId: expect.any(String),
+      answerKey: 'A',
+      explanation: 'Add one.',
+    });
     expect(manifest.body.data.objectives).toHaveLength(3);
   });
 

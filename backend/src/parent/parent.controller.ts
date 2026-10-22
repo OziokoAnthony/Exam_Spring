@@ -1,13 +1,4 @@
-import {
-  Controller,
-  ForbiddenException,
-  Get,
-  Inject,
-  Param,
-  ParseUUIDPipe,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Inject, Param, ParseUUIDPipe, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 
 import type { PrismaClient } from '@examspring/db';
@@ -15,10 +6,14 @@ import type { PrismaClient } from '@examspring/db';
 import { PRISMA } from '../database/database.module';
 import { getAuthUser, JwtAuthGuard } from '../common/jwt-auth.guard';
 import { ok } from '../common/envelope';
+import { ReportsService } from '../reports/reports.service';
 
 @Controller('parent')
 export class ParentController {
-  constructor(@Inject(PRISMA) private readonly prisma: PrismaClient) {}
+  constructor(
+    @Inject(PRISMA) private readonly prisma: PrismaClient,
+    @Inject(ReportsService) private readonly reports: ReportsService,
+  ) {}
 
   @Get('children')
   @UseGuards(JwtAuthGuard)
@@ -39,15 +34,6 @@ export class ParentController {
   @UseGuards(JwtAuthGuard)
   async summary(@Param('learnerId', ParseUUIDPipe) learnerId: string, @Req() req: Request) {
     const user = getAuthUser(req);
-    const link = await this.prisma.guardianLink.findFirst({
-      where: { guardianId: user.id, learnerId, status: 'ACTIVE' },
-    });
-    if (!link && user.role !== 'ADMIN') throw new ForbiddenException('Not your learner');
-    const mastery = await this.prisma.masteryScore.findMany({ where: { learnerId } });
-    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const recentItems = await this.prisma.attemptItem.count({
-      where: { answeredAt: { gte: since }, attempt: { learnerId } },
-    });
-    return ok({ mastery, last7DaysAnswers: recentItems });
+    return ok(await this.reports.getChildReport(learnerId, user.id, user.role));
   }
 }

@@ -48,7 +48,7 @@ export class ContentPacksService {
     });
     const questions = await this.prisma.question.findMany({
       where: { subjectId: pack.subjectId, status: 'APPROVED', deletedAt: null },
-      include: { currentVersion: true },
+      include: { currentVersion: true, objectives: { select: { objectiveId: true } } },
       take: 1000,
     });
     return {
@@ -62,14 +62,24 @@ export class ContentPacksService {
         sizeBytes: pack.sizeBytes,
       },
       objectives,
-      questions: questions.map((q) => ({
-        id: q.id,
-        type: q.type,
-        difficulty: q.difficulty,
-        body: q.currentVersion?.body ?? null,
-        options: q.currentVersion?.options ?? [],
-        answerKey: q.currentVersion?.answerKey ?? null,
-      })),
+      // Answer keys ship so offline practice can give feedback; the server re-scores on sync.
+      questions: questions.flatMap((q) =>
+        q.currentVersion
+          ? [
+              {
+                id: q.id,
+                versionId: q.currentVersion.id,
+                type: q.type,
+                difficulty: q.difficulty,
+                objectiveIds: q.objectives.map((o) => o.objectiveId),
+                body: q.currentVersion.body,
+                options: q.currentVersion.options,
+                answerKey: q.currentVersion.answerKey,
+                explanation: q.currentVersion.explanation,
+              },
+            ]
+          : [],
+      ),
     };
   }
 

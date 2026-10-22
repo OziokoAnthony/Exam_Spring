@@ -1,4 +1,10 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { z } from 'zod';
 
 import type { PrismaClient } from '@examspring/db';
@@ -53,7 +59,19 @@ export class QuestionsService {
       },
       orderBy: { createdAt: 'desc' },
       take: 100,
-      include: { currentVersion: { select: { id: true, body: true } } },
+      include: {
+        currentVersion: {
+          select: {
+            id: true,
+            version: true,
+            body: true,
+            options: true,
+            answerKey: true,
+            explanation: true,
+            provenance: true,
+          },
+        },
+      },
     });
   }
 
@@ -152,12 +170,11 @@ export class QuestionsService {
     if (!question || question.deletedAt) throw new NotFoundException('Question not found');
     if (status === 'APPROVED') {
       const current = question.versions.find((v) => v.id === question.currentVersionId);
-      if (current) {
-        await this.prisma.questionVersion.update({
-          where: { id: current.id },
-          data: { approvedBy: adminId, approvedAt: new Date() },
-        });
-      }
+      if (!current) throw new UnprocessableEntityException('Question has no version to approve');
+      await this.prisma.questionVersion.update({
+        where: { id: current.id },
+        data: { approvedBy: adminId, approvedAt: new Date() },
+      });
     }
     return this.prisma.question.update({ where: { id: questionId }, data: { status } });
   }

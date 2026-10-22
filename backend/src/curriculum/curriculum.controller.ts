@@ -36,10 +36,13 @@ export class CurriculumController {
   }
 
   @Get('objectives')
-  async objectives(@Query('subjectId', optionalUuid) subjectId?: string) {
+  async objectives(
+    @Query('subjectId', optionalUuid) subjectId?: string,
+    @Query('examId', optionalUuid) examId?: string,
+  ) {
     return ok(
       await this.prisma.objective.findMany({
-        where: subjectId ? { subjectId } : {},
+        where: { ...(subjectId ? { subjectId } : {}), ...(examId ? { subject: { examId } } : {}) },
         select: {
           id: true,
           subjectId: true,
