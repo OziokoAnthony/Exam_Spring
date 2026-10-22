@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Inject, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Inject,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { ForbiddenException } from '@nestjs/common';
 import type { Request } from 'express';
 
@@ -19,13 +30,13 @@ export class ContentPacksController {
 
   @Get()
   @UseGuards(JwtAuthGuard)
-  async list(@Query('subjectId') subjectId?: string) {
+  async list(@Query('subjectId', new ParseUUIDPipe({ optional: true })) subjectId?: string) {
     return ok(await this.packs.list(subjectId));
   }
 
   @Get(':id/manifest')
   @UseGuards(JwtAuthGuard)
-  async manifest(@Param('id') id: string) {
+  async manifest(@Param('id', ParseUUIDPipe) id: string) {
     return ok(await this.packs.getManifest(id));
   }
 
@@ -41,7 +52,7 @@ export class ContentPacksController {
 
   @Post(':id/publish')
   @UseGuards(JwtAuthGuard)
-  async publish(@Param('id') id: string, @Req() req: Request) {
+  async publish(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
     requireAdmin(req);
     return ok(await this.packs.publish(id));
   }

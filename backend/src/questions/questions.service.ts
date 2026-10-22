@@ -1,4 +1,4 @@
-import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { z } from 'zod';
 
 import type { PrismaClient } from '@examspring/db';
@@ -57,7 +57,19 @@ export class QuestionsService {
     });
   }
 
+  /** Every objective must exist and belong to the question's subject. */
+  private async assertObjectives(subjectId: string, objectiveIds: string[]): Promise<void> {
+    const unique = [...new Set(objectiveIds)];
+    const found = await this.prisma.objective.count({
+      where: { id: { in: unique }, subjectId },
+    });
+    if (found !== unique.length) {
+      throw new BadRequestException('Objectives must belong to the question subject');
+    }
+  }
+
   async create(dto: CreateQuestion, authorId: string) {
+    await this.assertObjectives(dto.subjectId, dto.objectiveIds);
     const question = await this.prisma.question.create({
       data: {
         subjectId: dto.subjectId,
@@ -106,6 +118,8 @@ export class QuestionsService {
   }
 
   async createVersion(questionId: string, dto: CreateQuestion, authorId: string) {
+    const question = await this.prisma.question.findUnique({ where: { id: questionId } });
+    if (!question || question.deletedAt) throw new NotFoundException('Question not found');
     const latest = await this.prisma.questionVersion.findFirst({
       where: { questionId },
       orderBy: { version: 'desc' },
@@ -135,7 +149,7 @@ export class QuestionsService {
       where: { id: questionId },
       include: { versions: true },
     });
-    if (!question) throw new UnauthorizedException('Question not found');
+    if (!question || question.deletedAt) throw new NotFoundException('Question not found');
     if (status === 'APPROVED') {
       const current = question.versions.find((v) => v.id === question.currentVersionId);
       if (current) {

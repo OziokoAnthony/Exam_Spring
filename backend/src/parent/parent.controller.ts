@@ -1,4 +1,13 @@
-import { Controller, ForbiddenException, Get, Inject, Param, Req, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  ForbiddenException,
+  Get,
+  Inject,
+  Param,
+  ParseUUIDPipe,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import type { Request } from 'express';
 
 import type { PrismaClient } from '@examspring/db';
@@ -17,21 +26,18 @@ export class ParentController {
     const user = getAuthUser(req);
     const links = await this.prisma.guardianLink.findMany({
       where: { guardianId: user.id, status: 'ACTIVE' },
+      select: { learnerId: true },
     });
-    const learners = await Promise.all(
-      links.map((l) =>
-        this.prisma.user.findUnique({
-          where: { id: l.learnerId },
-          select: { id: true, fullName: true, emailVerifiedAt: true },
-        }),
-      ),
-    );
-    return ok(learners.filter((l) => l !== null));
+    const learners = await this.prisma.user.findMany({
+      where: { id: { in: links.map((l) => l.learnerId) } },
+      select: { id: true, fullName: true, emailVerifiedAt: true },
+    });
+    return ok(learners);
   }
 
   @Get('children/:learnerId/summary')
   @UseGuards(JwtAuthGuard)
-  async summary(@Param('learnerId') learnerId: string, @Req() req: Request) {
+  async summary(@Param('learnerId', ParseUUIDPipe) learnerId: string, @Req() req: Request) {
     const user = getAuthUser(req);
     const link = await this.prisma.guardianLink.findFirst({
       where: { guardianId: user.id, learnerId, status: 'ACTIVE' },

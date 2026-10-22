@@ -1,5 +1,6 @@
 import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common';
 import { Catch, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { Prisma } from '@examspring/db';
 import { isErrorCode } from '@examspring/shared';
 import type { ErrorCode } from '@examspring/shared';
 import type { Response } from 'express';
@@ -26,6 +27,27 @@ function explicitCode(exception: HttpException): ErrorCode | undefined {
   return undefined;
 }
 
+/** Maps expected Prisma failures to client errors instead of 500s. */
+function prismaError(
+  exception: unknown,
+): { status: number; code: ErrorCode; message: string } | null {
+  if (!(exception instanceof Prisma.PrismaClientKnownRequestError)) return null;
+  if (exception.code === 'P2002') {
+    return { status: HttpStatus.CONFLICT, code: 'CONFLICT', message: 'Already exists' };
+  }
+  if (exception.code === 'P2025') {
+    return { status: HttpStatus.NOT_FOUND, code: 'NOT_FOUND', message: 'Not found' };
+  }
+  if (exception.code === 'P2003') {
+    return {
+      status: HttpStatus.BAD_REQUEST,
+      code: 'VALIDATION_ERROR',
+      message: 'Related record not found',
+    };
+  }
+  return null;
+}
+
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger('ExceptionFilter');
@@ -36,6 +58,11 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       const status = exception.getStatus();
       const code = explicitCode(exception) ?? CODE_BY_STATUS[status] ?? 'INTERNAL_ERROR';
       res.status(status).json(fail(code, exception.message));
+      return;
+    }
+    const mapped = prismaError(exception);
+    if (mapped) {
+      res.status(mapped.status).json(fail(mapped.code, mapped.message));
       return;
     }
     this.logger.error(

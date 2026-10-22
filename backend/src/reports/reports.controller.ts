@@ -1,4 +1,4 @@
-import { Controller, Get, Inject, Param, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Inject, Param, ParseUUIDPipe, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 
 import { ReportsService } from './reports.service';
@@ -18,14 +18,14 @@ export class ReportsController {
 
   @Get('teacher/cohorts/:cohortId')
   @UseGuards(JwtAuthGuard)
-  async teacherCohort(@Param('cohortId') cohortId: string, @Req() req: Request) {
+  async teacherCohort(@Param('cohortId', ParseUUIDPipe) cohortId: string, @Req() req: Request) {
     const user = getAuthUser(req);
     return ok(await this.reports.getCohortReport(cohortId, user.id, user.role));
   }
 
   @Get('parent/children/:learnerId')
   @UseGuards(JwtAuthGuard)
-  async parentChild(@Param('learnerId') learnerId: string, @Req() req: Request) {
+  async parentChild(@Param('learnerId', ParseUUIDPipe) learnerId: string, @Req() req: Request) {
     const user = getAuthUser(req);
     return ok(await this.reports.getChildReport(learnerId, user.id, user.role));
   }

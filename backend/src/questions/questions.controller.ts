@@ -1,5 +1,16 @@
-import { Body, Controller, Get, Inject, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
-import { ForbiddenException } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  ForbiddenException,
+  Get,
+  Inject,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import type { Request } from 'express';
 import { z } from 'zod';
 
@@ -21,11 +32,11 @@ export class QuestionsController {
   @Get()
   @UseGuards(JwtAuthGuard)
   async list(
+    @Req() req: Request,
     @Query('status') status?: string,
-    @Query('subjectId') subjectId?: string,
-    @Req() req?: Request,
+    @Query('subjectId', new ParseUUIDPipe({ optional: true })) subjectId?: string,
   ) {
-    if (req) requireAdmin(req);
+    requireAdmin(req);
     return ok(await this.questions.list(status, subjectId));
   }
 
@@ -53,7 +64,7 @@ export class QuestionsController {
   @Post(':id/versions')
   @UseGuards(JwtAuthGuard)
   async newVersion(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodPipe(CreateQuestionSchema)) dto: Parameters<QuestionsService['create']>[0],
     @Req() req: Request,
   ) {
@@ -63,14 +74,14 @@ export class QuestionsController {
 
   @Post(':id/approve')
   @UseGuards(JwtAuthGuard)
-  async approve(@Param('id') id: string, @Req() req: Request) {
+  async approve(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
     const user = requireAdmin(req);
     return ok(await this.questions.setStatus(id, 'APPROVED', user.id));
   }
 
   @Post(':id/reject')
   @UseGuards(JwtAuthGuard)
-  async reject(@Param('id') id: string, @Req() req: Request) {
+  async reject(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
     const user = requireAdmin(req);
     return ok(await this.questions.setStatus(id, 'REJECTED', user.id));
   }
