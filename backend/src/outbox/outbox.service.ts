@@ -115,7 +115,7 @@ export class OutboxService implements OnModuleInit, OnModuleDestroy {
       await this.email.send(
         payload.to,
         payload.subject,
-        renderEmail(payload.template, payload.data),
+        await renderEmail(payload.template, payload.data),
       );
       await this.prisma.outboxEvent.update({
         where: { id },

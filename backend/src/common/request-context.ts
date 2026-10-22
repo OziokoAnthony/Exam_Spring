@@ -16,9 +16,14 @@ export class RequestContextMiddleware implements NestMiddleware {
     res.setHeader('x-request-id', request.id);
     res.on('finish', () => {
       const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
-      this.logger.log(
-        `method=${req.method} path=${req.path} statusCode=${res.statusCode} durationMs=${durationMs.toFixed(1)} requestId=${request.id ?? ''}`,
-      );
+      this.logger.log({
+        msg: 'request',
+        method: req.method,
+        path: req.path,
+        statusCode: res.statusCode,
+        durationMs: Number(durationMs.toFixed(1)),
+        requestId: request.id,
+      });
     });
     next();
   }

@@ -1,6 +1,7 @@
 import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common';
 import { Catch, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { Prisma } from '@examspring/db';
+import * as Sentry from '@sentry/nestjs';
 import { isErrorCode } from '@examspring/shared';
 import type { ErrorCode } from '@examspring/shared';
 import type { Response } from 'express';
@@ -65,6 +66,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       res.status(mapped.status).json(fail(mapped.code, mapped.message));
       return;
     }
+    Sentry.captureException(exception);
     this.logger.error(
       'Unhandled error',
       exception instanceof Error ? exception.stack : String(exception),

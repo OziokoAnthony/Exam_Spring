@@ -1,7 +1,7 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { escapeHtml, renderEmail } from '../src/mail/templates';
+import { renderEmail } from '../src/mail/templates';
 import { api, createTestApp, createUser, prisma, uniqueEmail } from './helpers';
 import type { TestUser } from './helpers';
 
@@ -62,10 +62,17 @@ describe('Notifications and outbox', () => {
     expect(denied.status).toBe(403);
   });
 
-  it('escapes user-supplied names in email HTML', () => {
-    const html = renderEmail('guardian-invite', { learnerName: '<script>x</script>', token: 't' });
+  it('escapes user-supplied names in email HTML', async () => {
+    const html = await renderEmail('guardian-invite', {
+      learnerName: '<script>x</script>',
+      token: 't',
+    });
     expect(html).not.toContain('<script>');
-    expect(html).toContain(escapeHtml('<script>x</script>'));
+    expect(html).toContain('&lt;script&gt;');
     expect(html).toMatch(/\/consent\/approve\?token=t/);
+  });
+
+  it('rejects unknown templates', async () => {
+    await expect(renderEmail('nope', {})).rejects.toThrow('Unknown email template');
   });
 });
