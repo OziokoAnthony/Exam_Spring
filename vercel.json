@@ -10,7 +10,7 @@
       "root": "backend",
       "framework": "node",
       "entrypoint": "api/index.ts",
-      "installCommand": "npm install",
+      "installCommand": "pnpm install",
       "buildCommand": "pnpm --filter @examspring/shared build && pnpm --filter @examspring/db generate && pnpm --filter @examspring/db build",
       "rewrites": [
         {
