@@ -55,6 +55,10 @@ Key pages: `/login`, `/signup`, `/learner`, `/learner/diagnostic`, `/learner/pra
 pnpm --filter @examspring/api test
 ```
 
+## Deploy
+
+See `docs/deploy.md` (Vercel web + Railway API, RLS app role, env vars, rollback).
+
 ## Deferred (founder action required)
 
 - Resend live key, Sentry DSN, Vercel/Railway/GitHub deploy secrets
