@@ -17,6 +17,7 @@ enum Role {
 }
 
 enum UserStatus {
+  PENDING_GUARDIAN_CONSENT
   ACTIVE
   SUSPENDED
   DELETED

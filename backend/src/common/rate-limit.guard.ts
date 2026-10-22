@@ -7,6 +7,7 @@ import type Redis from 'ioredis';
 import { REDIS } from '../redis/redis.module';
 
 const RATE_LIMIT_KEY = 'rate-limit';
+const DEFAULT_LIMIT = { limit: 120, windowSeconds: 60 };
 
 export function RateLimit(limit: number, windowSeconds: number): MethodDecorator {
   return SetMetadata(RATE_LIMIT_KEY, { limit, windowSeconds });
@@ -20,11 +21,11 @@ export class RateLimitGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const cfg = this.reflector.get<{ limit: number; windowSeconds: number } | undefined>(
-      RATE_LIMIT_KEY,
-      context.getHandler(),
-    );
-    if (!cfg) return true;
+    const cfg =
+      this.reflector.get<{ limit: number; windowSeconds: number } | undefined>(
+        RATE_LIMIT_KEY,
+        context.getHandler(),
+      ) ?? DEFAULT_LIMIT;
     const req = context.switchToHttp().getRequest<Request>();
     const key = `rl:${req.ip ?? 'unknown'}:${req.route?.path ?? req.url}`;
     const count = await this.redis.incr(key);

@@ -1,23 +1,18 @@
 import 'reflect-metadata';
+import 'dotenv/config';
 
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import cookieParser from 'cookie-parser';
-import helmet from 'helmet';
-import 'dotenv/config';
 
 import { AppModule } from './app.module';
+import { configureApp } from './bootstrap';
 import { loadEnv } from './config/env';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  app.setGlobalPrefix('v1');
-  app.useBodyParser('json', { limit: '100kb' });
-  app.use(cookieParser());
-  app.use(helmet());
-  app.enableCors({ origin: loadEnv().WEB_ORIGIN, credentials: true });
-  const port = Number(process.env.API_PORT ?? 3001);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
+  configureApp(app);
+  const port = loadEnv().API_PORT;
   await app.listen(port);
   new Logger('Bootstrap').log(`API listening on port ${port}`);
 }

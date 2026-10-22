@@ -10,5 +10,6 @@ import { OutboxModule } from '../outbox/outbox.module';
   imports: [JwtModule.register({}), OutboxModule],
   controllers: [ConsentController],
   providers: [ConsentService, JwtAuthGuard],
+  exports: [ConsentService],
 })
 export class ConsentModule {}

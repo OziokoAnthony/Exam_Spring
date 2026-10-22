@@ -62,13 +62,14 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const result = await this.auth.login(dto, req.headers['user-agent'], req.ip);
+    const result = await this.auth.login(dto, { userAgent: req.headers['user-agent'], ip: req.ip });
     setRefreshCookie(res, result.refreshToken);
     return ok({ user: result.user, accessToken: result.accessToken, expiresIn: result.expiresIn });
   }
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
+  @RateLimit(30, 60)
   async refresh(
     @Body() body: { refreshToken?: string },
     @Req() req: Request,
@@ -76,7 +77,10 @@ export class AuthController {
   ) {
     const token = readRefreshToken(req, body);
     if (!token) throw new UnauthorizedException('Missing refresh token');
-    const result = await this.auth.refresh(token, req.headers['user-agent'], req.ip);
+    const result = await this.auth.refresh(token, {
+      userAgent: req.headers['user-agent'],
+      ip: req.ip,
+    });
     setRefreshCookie(res, result.refreshToken);
     return ok({ user: result.user, accessToken: result.accessToken, expiresIn: result.expiresIn });
   }
@@ -106,6 +110,7 @@ export class AuthController {
 
   @Post('reset-password/confirm')
   @HttpCode(HttpStatus.OK)
+  @RateLimit(5, 60)
   async confirmReset(
     @Body(new ZodPipe(ResetPasswordConfirmSchema))
     dto: Parameters<AuthService['confirmPasswordReset']>[0],
