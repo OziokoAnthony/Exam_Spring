@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Inject, Param, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Inject,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import type { Request } from 'express';
 import { z } from 'zod';
 
@@ -9,13 +19,32 @@ import { ok } from '../common/envelope';
 import { ZodPipe } from '../common/zod.pipe';
 
 const StartSchema = z.object({ subjectId: z.string().uuid() });
-const SubmitSchema = z.object({
-  answers: z
-    .array(z.object({ questionVersionId: z.string().uuid(), response: z.string() }))
-    .max(100),
+const AnswerSchema = z.object({
+  questionVersionId: z.string().uuid(),
+  response: z.enum(['A', 'B', 'C', 'D']),
+});
+const SubmitSchema = z.object({ answers: z.array(AnswerSchema).max(100) });
+const SyncSchema = z.object({
+  attempts: z
+    .array(
+      z.object({
+        idempotencyKey: z.string().min(8).max(100),
+        subjectId: z.string().uuid(),
+        mode: z.enum(['PRACTICE', 'DIAGNOSTIC', 'CBT']),
+        answers: z.array(AnswerSchema).min(1).max(100),
+      }),
+    )
+    .max(50),
 });
 
+type SyncResult = {
+  idempotencyKey: string;
+  status: 'SYNCED' | 'ALREADY_SYNCED';
+  scorePct: unknown;
+};
+
 @Controller('attempts')
+@UseGuards(JwtAuthGuard)
 export class AttemptsController {
   constructor(
     @Inject(AttemptsService) private readonly attempts: AttemptsService,
@@ -23,7 +52,6 @@ export class AttemptsController {
   ) {}
 
   @Post('diagnostic')
-  @UseGuards(JwtAuthGuard)
   async start(
     @Body(new ZodPipe(StartSchema)) dto: z.infer<typeof StartSchema>,
     @Req() req: Request,
@@ -32,9 +60,8 @@ export class AttemptsController {
   }
 
   @Post(':id/submit')
-  @UseGuards(JwtAuthGuard)
   async submit(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodPipe(SubmitSchema)) dto: z.infer<typeof SubmitSchema>,
     @Req() req: Request,
   ) {
@@ -42,13 +69,11 @@ export class AttemptsController {
   }
 
   @Get('mastery')
-  @UseGuards(JwtAuthGuard)
   async mastery(@Req() req: Request) {
     return ok(await this.attempts.getMastery(getAuthUser(req).id));
   }
 
   @Post('cbt')
-  @UseGuards(JwtAuthGuard)
   async startCbt(
     @Body(new ZodPipe(StartSchema)) dto: z.infer<typeof StartSchema>,
     @Req() req: Request,
@@ -57,7 +82,6 @@ export class AttemptsController {
   }
 
   @Post('practice')
-  @UseGuards(JwtAuthGuard)
   async startPractice(
     @Body(new ZodPipe(StartSchema)) dto: z.infer<typeof StartSchema>,
     @Req() req: Request,
@@ -65,31 +89,25 @@ export class AttemptsController {
     return ok(await this.practice.startPractice(getAuthUser(req).id, dto.subjectId));
   }
 
+  /** Offline attempts are re-scored on the server; the client's score is never trusted. */
   @Post('sync')
-  @UseGuards(JwtAuthGuard)
   async syncOffline(
-    @Body()
-    body: {
-      attempts: {
-        idempotencyKey: string;
-        subjectId: string;
-        mode: 'PRACTICE' | 'DIAGNOSTIC' | 'CBT';
-        answers: { questionVersionId: string; response: string }[];
-      }[];
-    },
+    @Body(new ZodPipe(SyncSchema)) body: z.infer<typeof SyncSchema>,
     @Req() req: Request,
   ) {
     const learnerId = getAuthUser(req).id;
-    const results = [];
-    for (const offline of body.attempts ?? []) {
-      const existing = await this.attempts.findByIdempotencyKey(offline.idempotencyKey);
+    const results: SyncResult[] = [];
+    for (const offline of body.attempts) {
+      const existing = await this.attempts.findOwnByIdempotencyKey(
+        learnerId,
+        offline.idempotencyKey,
+      );
       if (existing) {
-        results.push({ idempotencyKey: offline.idempotencyKey, status: 'ALREADY_SYNCED' });
-        continue;
-      }
-      const subject = await this.attempts.getSubject(offline.subjectId);
-      if (!subject) {
-        results.push({ idempotencyKey: offline.idempotencyKey, status: 'REJECTED' });
+        results.push({
+          idempotencyKey: offline.idempotencyKey,
+          status: 'ALREADY_SYNCED',
+          scorePct: existing.scorePct,
+        });
         continue;
       }
       const attempt = await this.attempts.createOfflineAttempt({
@@ -110,8 +128,7 @@ export class AttemptsController {
   }
 
   @Get(':id/review')
-  @UseGuards(JwtAuthGuard)
-  async review(@Param('id') id: string, @Req() req: Request) {
+  async review(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
     return ok(await this.attempts.getReview(id, getAuthUser(req).id));
   }
 }
