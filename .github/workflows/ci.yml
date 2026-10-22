@@ -8,6 +8,32 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: examspring
+          POSTGRES_PASSWORD: examspring
+          POSTGRES_DB: examspring
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U examspring -d examspring"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://examspring:examspring@localhost:5434/examspring?schema=public
+      REDIS_URL: redis://localhost:6380
+      JWT_ACCESS_SECRET: ci-only-access-secret-not-for-prod
+      JWT_REFRESH_SECRET: ci-only-refresh-secret-not-for-prod
+      WEB_ORIGIN: http://localhost:3000
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -20,5 +46,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
+      - run: pnpm --filter @examspring/db exec prisma migrate deploy
       - run: pnpm --filter @examspring/api test
       - run: pnpm build

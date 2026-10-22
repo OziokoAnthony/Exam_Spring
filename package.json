@@ -6,7 +6,7 @@
     "dev": "turbo dev",
     "build": "pnpm --filter @examspring/db generate && turbo build",
     "lint": "turbo lint",
-    "typecheck": "turbo typecheck",
+    "typecheck": "pnpm --filter @examspring/db generate && turbo typecheck",
     "db:migrate": "pnpm --filter @examspring/db migrate:dev",
     "db:seed": "pnpm --filter @examspring/db seed",
     "db:studio": "pnpm --filter @examspring/db studio",
