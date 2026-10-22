@@ -1,4 +1,4 @@
-import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { createHash, randomBytes } from 'crypto';
@@ -14,12 +14,17 @@ import type {
 
 import { PRISMA } from '../database/database.module';
 import { loadEnv } from '../config/env';
+import { ConsentService } from '../consent/consent.service';
 import { OutboxService } from '../outbox/outbox.service';
 
 const BCRYPT_ROUNDS = 12;
 const ACCESS_TTL = '15m';
 const REFRESH_TTL_DAYS = 30;
 const RESET_TTL_MS = 60 * 60 * 1000;
+const LOGIN_STATUSES = new Set(['ACTIVE', 'PENDING_GUARDIAN_CONSENT']);
+
+type ClientInfo = { userAgent?: string | undefined; ip?: string | undefined };
+type TokenSubject = { id: string; role: string; status: string };
 
 function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex');
@@ -40,12 +45,17 @@ export class AuthService {
     @Inject(PRISMA) private readonly prisma: PrismaClient,
     @Inject(JwtService) private readonly jwt: JwtService,
     @Inject(OutboxService) private readonly outbox: OutboxService,
+    @Inject(ConsentService) private readonly consent: ConsentService,
   ) {}
 
   async signup(dto: SignupDto) {
     const birth = new Date(dto.dateOfBirth);
     const age = (Date.now() - birth.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
-    if (age < 5 || age > 100) throw new UnauthorizedException('Invalid date of birth');
+    if (age < 5 || age > 100) throw new BadRequestException('Invalid date of birth');
+    const isMinor = computeIsMinor(dto.dateOfBirth);
+    if (isMinor && dto.role !== 'LEARNER') {
+      throw new BadRequestException('Only learner accounts can be created for under-18s');
+    }
     const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
     if (existing) {
       throw new UnauthorizedException('Unable to create account');
@@ -58,10 +68,12 @@ export class AuthService {
         role: dto.role,
         fullName: dto.fullName,
         dateOfBirth: birth,
-        isMinor: computeIsMinor(dto.dateOfBirth),
+        isMinor,
+        status: isMinor ? 'PENDING_GUARDIAN_CONSENT' : 'ACTIVE',
       },
     });
-    const verificationToken = this.signVerifyToken(user.id, user.email);
+    if (isMinor && dto.guardianEmail) await this.consent.sendInvite(user, dto.guardianEmail);
+    const verificationToken = this.signVerifyToken(user.id);
     await this.outbox.enqueueEmail(
       user.email,
       'Verify your ExamSpring email',
@@ -75,31 +87,33 @@ export class AuthService {
     };
   }
 
-  async login(dto: LoginDto, userAgent?: string, ip?: string) {
+  async login(dto: LoginDto, client: ClientInfo) {
     const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
-    if (!user || user.status !== 'ACTIVE') {
+    if (!user || !LOGIN_STATUSES.has(user.status)) {
       throw new UnauthorizedException('Invalid credentials');
     }
     const matches = await bcrypt.compare(dto.password, user.passwordHash);
     if (!matches) throw new UnauthorizedException('Invalid credentials');
-    const tokens = await this.issueTokens(user.id, user.role, userAgent, ip);
+    const tokens = await this.issueTokens(user, client);
     await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
     return { user: this.publicUser(user), ...tokens };
   }
 
-  async refresh(refreshToken: string, userAgent?: string, ip?: string) {
+  async refresh(refreshToken: string, client: ClientInfo) {
     const hash = sha256(refreshToken);
     const session = await this.prisma.session.findUnique({ where: { refreshTokenHash: hash } });
     if (!session || session.revokedAt || session.expiresAt < new Date()) {
       throw new UnauthorizedException('Invalid refresh token');
     }
     const user = await this.prisma.user.findUnique({ where: { id: session.userId } });
-    if (!user) throw new UnauthorizedException('Invalid session');
+    if (!user || !LOGIN_STATUSES.has(user.status)) {
+      throw new UnauthorizedException('Invalid session');
+    }
     await this.prisma.session.update({
       where: { id: session.id },
       data: { revokedAt: new Date() },
     });
-    const tokens = await this.issueTokens(user.id, user.role, userAgent, ip);
+    const tokens = await this.issueTokens(user, client);
     return { user: this.publicUser(user), ...tokens };
   }
 
@@ -167,27 +181,27 @@ export class AuthService {
     });
   }
 
-  private signVerifyToken(userId: string, email: string): string {
+  private signVerifyToken(userId: string): string {
     const env = loadEnv();
     return this.jwt.sign(
-      { type: 'verify-email', email },
+      { type: 'verify-email' },
       { secret: env.JWT_REFRESH_SECRET, expiresIn: '24h', subject: userId },
     );
   }
 
-  private async issueTokens(userId: string, role: string, userAgent?: string, ip?: string) {
+  private async issueTokens(user: TokenSubject, client: ClientInfo) {
     const env = loadEnv();
     const accessToken = this.jwt.sign(
-      { role },
-      { secret: env.JWT_ACCESS_SECRET, expiresIn: ACCESS_TTL, subject: userId },
+      { role: user.role, status: user.status },
+      { secret: env.JWT_ACCESS_SECRET, expiresIn: ACCESS_TTL, subject: user.id },
     );
     const refreshToken = randomBytes(48).toString('hex');
     await this.prisma.session.create({
       data: {
-        userId,
+        userId: user.id,
         refreshTokenHash: sha256(refreshToken),
-        deviceLabel: userAgent?.slice(0, 120) ?? null,
-        ipAddress: ip ?? null,
+        deviceLabel: client.userAgent?.slice(0, 120) ?? null,
+        ipAddress: client.ip ?? null,
         expiresAt: new Date(Date.now() + REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000),
         lastUsedAt: new Date(),
       },
@@ -199,6 +213,7 @@ export class AuthService {
     id: string;
     email: string;
     role: string;
+    status: string;
     fullName: string;
     isMinor: boolean;
     emailVerifiedAt: Date | null;
@@ -207,6 +222,7 @@ export class AuthService {
       id: user.id,
       email: user.email,
       role: user.role,
+      status: user.status,
       fullName: user.fullName,
       isMinor: user.isMinor,
       emailVerified: user.emailVerifiedAt !== null,

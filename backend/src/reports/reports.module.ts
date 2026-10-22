@@ -9,5 +9,6 @@ import { JwtAuthGuard } from '../common/jwt-auth.guard';
   imports: [JwtModule.register({})],
   controllers: [ReportsController],
   providers: [ReportsService, JwtAuthGuard],
+  exports: [ReportsService],
 })
 export class ReportsModule {}

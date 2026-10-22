@@ -3,10 +3,11 @@ import { JwtModule } from '@nestjs/jwt';
 
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { ConsentModule } from '../consent/consent.module';
 import { OutboxModule } from '../outbox/outbox.module';
 
 @Module({
-  imports: [JwtModule.register({}), OutboxModule],
+  imports: [JwtModule.register({}), OutboxModule, ConsentModule],
   controllers: [AuthController],
   providers: [AuthService],
 })

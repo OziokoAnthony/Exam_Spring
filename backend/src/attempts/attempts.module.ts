@@ -5,10 +5,11 @@ import { AttemptsController } from './attempts.controller';
 import { AttemptsService } from './attempts.service';
 import { PracticeService } from './practice.service';
 import { JwtAuthGuard } from '../common/jwt-auth.guard';
+import { MasteryService } from '../mastery/mastery.service';
 
 @Module({
   imports: [JwtModule.register({})],
   controllers: [AttemptsController],
-  providers: [AttemptsService, PracticeService, JwtAuthGuard],
+  providers: [AttemptsService, PracticeService, MasteryService, JwtAuthGuard],
 })
 export class AttemptsModule {}

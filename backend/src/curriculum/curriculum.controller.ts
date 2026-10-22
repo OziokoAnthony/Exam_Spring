@@ -1,26 +1,59 @@
-import { Controller, Get, Inject } from '@nestjs/common';
+import { Controller, Get, Inject, ParseUUIDPipe, Query } from '@nestjs/common';
 
 import type { PrismaClient } from '@examspring/db';
 
 import { PRISMA } from '../database/database.module';
 import { ok } from '../common/envelope';
 
+const optionalUuid = new ParseUUIDPipe({ optional: true });
+
+/** Public read-only curriculum. Rate limited by the global default. */
 @Controller()
 export class CurriculumController {
   constructor(@Inject(PRISMA) private readonly prisma: PrismaClient) {}
 
-  @Get('subjects')
-  async subjects() {
-    return ok(await this.prisma.subject.findMany({ orderBy: { name: 'asc' } }));
-  }
-
   @Get('exams')
   async exams() {
-    return ok(await this.prisma.exam.findMany({ where: { isActive: true } }));
+    return ok(
+      await this.prisma.exam.findMany({
+        where: { isActive: true },
+        select: { id: true, code: true, name: true, description: true },
+        orderBy: { name: 'asc' },
+      }),
+    );
+  }
+
+  @Get('subjects')
+  async subjects(@Query('examId', optionalUuid) examId?: string) {
+    return ok(
+      await this.prisma.subject.findMany({
+        where: examId ? { examId } : { exam: { isActive: true } },
+        select: { id: true, code: true, name: true, examId: true },
+        orderBy: { name: 'asc' },
+        take: 500,
+      }),
+    );
   }
 
   @Get('objectives')
-  async objectives() {
-    return ok(await this.prisma.objective.findMany({ orderBy: { orderIndex: 'asc' }, take: 200 }));
+  async objectives(
+    @Query('subjectId', optionalUuid) subjectId?: string,
+    @Query('examId', optionalUuid) examId?: string,
+  ) {
+    return ok(
+      await this.prisma.objective.findMany({
+        where: { ...(subjectId ? { subjectId } : {}), ...(examId ? { subject: { examId } } : {}) },
+        select: {
+          id: true,
+          subjectId: true,
+          code: true,
+          description: true,
+          parentObjectiveId: true,
+          orderIndex: true,
+        },
+        orderBy: { orderIndex: 'asc' },
+        take: 500,
+      }),
+    );
   }
 }

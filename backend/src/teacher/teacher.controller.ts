@@ -1,11 +1,12 @@
 import {
   Body,
-  ConflictException,
   Controller,
+  ForbiddenException,
   Get,
   Inject,
   NotFoundException,
   Param,
+  ParseUUIDPipe,
   Post,
   Req,
   UseGuards,
@@ -20,6 +21,7 @@ import { PRISMA } from '../database/database.module';
 import { getAuthUser, JwtAuthGuard } from '../common/jwt-auth.guard';
 import { ok } from '../common/envelope';
 import { ZodPipe } from '../common/zod.pipe';
+import { cohortSummary } from './cohort-summary';
 
 const CreateCohortSchema = z.object({
   name: z.string().min(1).max(120),
@@ -43,8 +45,11 @@ export class TeacherController {
     @Req() req: Request,
   ) {
     const user = getAuthUser(req);
-    if (user.role !== 'TEACHER' && user.role !== 'ADMIN')
-      throw new ConflictException('Teacher role required');
+    if (user.role !== 'TEACHER' && user.role !== 'ADMIN') {
+      throw new ForbiddenException('Teacher role required');
+    }
+    const exam = await this.prisma.exam.findUnique({ where: { id: dto.examId } });
+    if (!exam) throw new NotFoundException('Exam not found');
     const cohort = await this.prisma.cohort.create({
       data: {
         teacherId: user.id,
@@ -66,8 +71,11 @@ export class TeacherController {
   @UseGuards(JwtAuthGuard)
   async join(@Body(new ZodPipe(JoinSchema)) dto: z.infer<typeof JoinSchema>, @Req() req: Request) {
     const user = getAuthUser(req);
-    const cohort = await this.prisma.cohort.findUnique({ where: { joinCode: dto.joinCode } });
-    if (!cohort) throw new NotFoundException('Cohort not found');
+    if (user.role !== 'LEARNER') throw new ForbiddenException('Only learners can join a class');
+    const cohort = await this.prisma.cohort.findUnique({
+      where: { joinCode: dto.joinCode.toUpperCase() },
+    });
+    if (!cohort || cohort.archivedAt) throw new NotFoundException('Cohort not found');
     await this.prisma.cohortMember.createMany({
       data: [{ cohortId: cohort.id, learnerId: user.id }],
       skipDuplicates: true,
@@ -77,7 +85,7 @@ export class TeacherController {
 
   @Get('cohorts/:id/summary')
   @UseGuards(JwtAuthGuard)
-  async summary(@Param('id') id: string, @Req() req: Request) {
+  async summary(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
     const user = getAuthUser(req);
     const cohort = await this.prisma.cohort.findUnique({
       where: { id },
@@ -85,30 +93,22 @@ export class TeacherController {
     });
     if (!cohort || (cohort.teacherId !== user.id && user.role !== 'ADMIN'))
       throw new NotFoundException('Cohort not found');
-    const memberScores = await Promise.all(
-      cohort.members.map(async (m) => {
-        const scores = await this.prisma.masteryScore.findMany({
-          where: { learnerId: m.learnerId },
-        });
-        const avg = scores.length
-          ? scores.reduce((a, s) => a + Number(s.score), 0) / scores.length
-          : 0;
-        return { learnerId: m.learnerId, averageMastery: avg };
-      }),
-    );
-    return ok({ cohort, memberScores });
+    return ok(await cohortSummary(this.prisma, cohort));
   }
 
   @Post('cohorts/:id/assignments')
   @UseGuards(JwtAuthGuard)
   async assign(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodPipe(AssignSchema)) dto: z.infer<typeof AssignSchema>,
     @Req() req: Request,
   ) {
     const user = getAuthUser(req);
     const cohort = await this.prisma.cohort.findUnique({ where: { id } });
     if (!cohort || cohort.teacherId !== user.id) throw new NotFoundException('Cohort not found');
+    const found = await this.prisma.objective.count({ where: { id: { in: dto.objectiveIds } } });
+    if (found !== new Set(dto.objectiveIds).size)
+      throw new NotFoundException('Objective not found');
     const assignment = await this.prisma.assignment.create({
       data: {
         cohortId: id,

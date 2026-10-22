@@ -1,10 +1,15 @@
- [build]
+# API service on Railway (SKILL.md 2.15 / 3.12). The web app stays on Vercel.
+[build]
 builder = "NIXPACKS"
 buildCommand = "pnpm --filter @examspring/shared build && pnpm --filter @examspring/db generate && pnpm --filter @examspring/db build && pnpm --filter @examspring/api build"
 
 [deploy]
+# Migrations run as the owner role; the API itself runs as the non-superuser
+# examspring_app role so Postgres RLS applies (docs/adr/0006).
+preDeployCommand = ["sh", "-c", "DATABASE_URL=\"$MIGRATION_DATABASE_URL\" pnpm --filter @examspring/db exec prisma migrate deploy"]
 startCommand = "node backend/dist/main.js"
-nreplicas = 1
+healthcheckPath = "/v1/health"
+healthcheckTimeout = 60
+numReplicas = 1
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
-

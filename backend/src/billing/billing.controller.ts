@@ -3,12 +3,16 @@ import {
   Controller,
   Get,
   Headers,
+  HttpCode,
+  HttpStatus,
   Inject,
   Param,
+  ParseUUIDPipe,
   Post,
   Req,
   UseGuards,
 } from '@nestjs/common';
+import type { RawBodyRequest } from '@nestjs/common';
 import type { Request } from 'express';
 import { z } from 'zod';
 
@@ -36,14 +40,18 @@ export class BillingController {
 
   @Get('orders/:id')
   @UseGuards(JwtAuthGuard)
-  async getOrder(@Param('id') id: string, @Req() req: Request) {
+  async getOrder(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
     return ok(await this.billing.getOrder(id, getAuthUser(req)));
   }
 
   // Public endpoint — deliberately no JwtAuthGuard; authenticity is enforced
-  // by the Paystack HMAC-SHA512 signature check in the service.
+  // by the Paystack HMAC-SHA512 signature over the raw body.
   @Post('webhooks/paystack')
-  async webhook(@Body() body: unknown, @Headers('x-paystack-signature') signature?: string) {
-    return ok(await this.billing.handlePaystackWebhook(body, signature));
+  @HttpCode(HttpStatus.OK)
+  async webhook(
+    @Req() req: RawBodyRequest<Request>,
+    @Headers('x-paystack-signature') signature?: string,
+  ) {
+    return ok(await this.billing.handlePaystackWebhook(req.rawBody, signature));
   }
 }

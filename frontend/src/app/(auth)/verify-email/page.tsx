@@ -1,37 +1,40 @@
 'use client';
 
-import { useState } from 'react';
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
 
-import { api } from '@/lib/api/client';
+import { ErrorText, Loading } from '@/components/ui';
+import { api, errorMessage } from '@/lib/api/client';
+import { useQueryParam } from '@/lib/use-query-param';
+
+type State = 'idle' | 'verifying' | 'verified' | 'failed';
 
 export default function VerifyEmailPage() {
-  const [token, setToken] = useState('');
-  const [message, setMessage] = useState('');
+  const token = useQueryParam('token');
+  const [state, setState] = useState<State>('idle');
+  const [error, setError] = useState('');
 
-  async function verify() {
-    try {
-      await api('/auth/verify-email', { method: 'POST', body: JSON.stringify({ token }) });
-      setMessage('Email verified. You can log in now.');
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Verification failed');
-    }
-  }
+  useEffect(() => {
+    if (!token) return;
+    setState('verifying');
+    api('/auth/verify-email', { method: 'POST', body: { token } })
+      .then(() => setState('verified'))
+      .catch((e: unknown) => {
+        setError(errorMessage(e, 'Verification failed'));
+        setState('failed');
+      });
+  }, [token]);
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-4">
-      <div className="flex w-full max-w-sm flex-col gap-4">
-        <h1 className="text-2xl font-semibold">Verify your email</h1>
-        <input
-          value={token}
-          onChange={(e) => setToken(e.target.value)}
-          placeholder="Paste verification token"
-          className="rounded border p-2"
-        />
-        <button onClick={verify} className="rounded bg-black p-3 text-white">
-          Verify
-        </button>
-        {message && <p className="text-sm">{message}</p>}
-      </div>
+    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-3 p-4">
+      <h1 className="text-2xl font-semibold">Verify your email</h1>
+      {state === 'idle' && <p>Open the link we emailed you to verify your address.</p>}
+      {state === 'verifying' && <Loading label="Verifying…" />}
+      {state === 'verified' && <p role="status">Your email is verified.</p>}
+      {state === 'failed' && <ErrorText message={`${error}. The link may have expired.`} />}
+      <Link href="/login" className="rounded bg-black p-3 text-center text-white">
+        Go to log in
+      </Link>
     </main>
   );
 }

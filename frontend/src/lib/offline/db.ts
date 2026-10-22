@@ -28,6 +28,7 @@ class ExamSpringDb extends Dexie {
     super('examspring');
     this.version(1).stores({ offlineAttempts: 'idempotencyKey' });
     this.version(2).stores({ offlineAttempts: 'idempotencyKey', contentPacks: 'id' });
+    this.version(3).stores({ offlineAttempts: 'idempotencyKey', contentPacks: 'id, subjectId' });
   }
 }
 

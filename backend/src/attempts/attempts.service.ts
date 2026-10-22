@@ -1,150 +1,164 @@
-import { Inject, Injectable } from '@nestjs/common';
-import type { PrismaClient } from '@examspring/db';
+import {
+  Inject,
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
+
+import type { Prisma, PrismaClient } from '@examspring/db';
 
 import { PRISMA } from '../database/database.module';
+import { MasteryService } from '../mastery/mastery.service';
+import type { GradedItem } from '../mastery/mastery.service';
+import { APPROVED_WITH_VERSION, SERVED_VERSION_SELECT, shuffle, toServed } from './selection';
+import type { ServedQuestion } from './selection';
+
+const DIAGNOSTIC_SIZE = 15;
+
+export type AnswerInput = { questionVersionId: string; response: string };
+export type AttemptMode = 'DIAGNOSTIC' | 'PRACTICE' | 'CBT';
+
+type AttemptRow = {
+  id: string;
+  learnerId: string;
+  subjectId: string;
+  mode: string;
+  totalQuestions: number;
+};
 
 @Injectable()
 export class AttemptsService {
-  constructor(@Inject(PRISMA) private readonly prisma: PrismaClient) {}
+  constructor(
+    @Inject(PRISMA) private readonly prisma: PrismaClient,
+    @Inject(MasteryService) private readonly mastery: MasteryService,
+  ) {}
 
-  async startDiagnostic(
-    learnerId: string,
-    subjectId: string,
-  ): Promise<{ attemptId: string; questions: unknown[] }> {
+  async startDiagnostic(learnerId: string, subjectId: string) {
+    const subject = await this.requireSubject(subjectId);
     const approved = await this.prisma.question.findMany({
-      where: { subjectId, status: 'APPROVED', deletedAt: null },
-      include: { currentVersion: true },
+      where: { subjectId, ...APPROVED_WITH_VERSION },
+      select: { id: true, difficulty: true, ...SERVED_VERSION_SELECT },
       take: 200,
     });
-    const picked = shuffle(approved).slice(0, 15);
-    const subject = await this.prisma.subject.findUnique({ where: { id: subjectId } });
-    if (!subject) throw new Error('Subject not found');
+    const questions = toServed(shuffle(approved).slice(0, DIAGNOSTIC_SIZE));
+    return this.openAttempt({ learnerId, subject, mode: 'DIAGNOSTIC', questions });
+  }
+
+  /** Creates an attempt for served questions; refuses empty attempts. */
+  async openAttempt(args: {
+    learnerId: string;
+    subject: { id: string; examId: string };
+    mode: AttemptMode;
+    questions: ServedQuestion[];
+  }): Promise<{ attemptId: string; questions: ServedQuestion[] }> {
+    if (args.questions.length === 0) {
+      throw new UnprocessableEntityException('No approved questions for this subject yet');
+    }
     const attempt = await this.prisma.attempt.create({
       data: {
-        learnerId,
-        examId: subject.examId,
-        subjectId,
-        mode: 'DIAGNOSTIC',
-        totalQuestions: picked.length,
-        idempotencyKey: `diag-${learnerId}-${Date.now()}`,
+        learnerId: args.learnerId,
+        examId: args.subject.examId,
+        subjectId: args.subject.id,
+        mode: args.mode,
+        totalQuestions: args.questions.length,
+        idempotencyKey: `${args.mode.toLowerCase()}-${args.learnerId}-${Date.now()}`,
       },
     });
-    return {
-      attemptId: attempt.id,
-      questions: picked.map((q) => ({
-        id: q.id,
-        versionId: q.currentVersion?.id,
-        body: q.currentVersion?.body,
-        options: q.currentVersion?.options,
-        difficulty: q.difficulty,
-      })),
-    };
+    return { attemptId: attempt.id, questions: args.questions };
   }
 
-  async submitAttempt(
-    attemptId: string,
-    learnerId: string,
-    answers: { questionVersionId: string; response: string }[],
-  ) {
+  async requireSubject(subjectId: string): Promise<{ id: string; examId: string }> {
+    const subject = await this.prisma.subject.findUnique({
+      where: { id: subjectId },
+      select: { id: true, examId: true },
+    });
+    if (!subject) throw new NotFoundException('Subject not found');
+    return subject;
+  }
+
+  /** Scores server-side. Idempotent: a second submit returns the first result. */
+  async submitAttempt(attemptId: string, learnerId: string, answers: AnswerInput[]) {
     const attempt = await this.prisma.attempt.findUnique({ where: { id: attemptId } });
-    if (!attempt || attempt.learnerId !== learnerId) throw new Error('Attempt not found');
-    if (attempt.submittedAt) return attempt;
-    let correct = 0;
-    for (const a of answers) {
-      const version = await this.prisma.questionVersion.findUnique({
-        where: { id: a.questionVersionId },
+    if (!attempt || attempt.learnerId !== learnerId)
+      throw new NotFoundException('Attempt not found');
+    return this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.attempt.updateMany({
+        where: { id: attemptId, submittedAt: null },
+        data: { submittedAt: new Date() },
       });
-      if (!version) continue;
-      const isCorrect = version.answerKey === a.response;
-      if (isCorrect) correct += 1;
-      const item = await this.prisma.attemptItem.create({
-        data: {
-          attemptId,
-          questionId: version.questionId,
-          questionVersionId: version.id,
-          response: a.response,
-          isCorrect,
-          answeredAt: new Date(),
-        },
+      if (claimed.count === 0) return tx.attempt.findUniqueOrThrow({ where: { id: attemptId } });
+      const graded = await this.grade(tx, attempt, answers);
+      await this.mastery.apply(tx, learnerId, graded, attempt.mode === 'DIAGNOSTIC');
+      const correct = graded.filter((g) => g.isCorrect).length;
+      const scorePct = attempt.totalQuestions > 0 ? (correct / attempt.totalQuestions) * 100 : 0;
+      return tx.attempt.update({
+        where: { id: attemptId },
+        data: { correctCount: correct, scorePct },
       });
-      await this.recordMastery(
-        learnerId,
-        version.questionId,
-        isCorrect,
-        item.id,
-        attempt.mode === 'DIAGNOSTIC',
-      );
-    }
-    const scorePct = attempt.totalQuestions > 0 ? (correct / attempt.totalQuestions) * 100 : 0;
-    return this.prisma.attempt.update({
-      where: { id: attemptId },
-      data: { submittedAt: new Date(), correctCount: correct, scorePct },
     });
   }
 
-  private async recordMastery(
-    learnerId: string,
-    questionId: string,
-    isCorrect: boolean,
-    itemId: string,
-    isDiagnostic: boolean,
-  ) {
-    const links = await this.prisma.questionObjective.findMany({ where: { questionId } });
-    for (const link of links) {
-      const existing = await this.prisma.masteryScore.findUnique({
-        where: { learnerId_objectiveId: { learnerId, objectiveId: link.objectiveId } },
-      });
-      const prior = existing ? Number(existing.score) : 0.5;
-      const next = clamp(prior * 0.5 + (isCorrect ? 1 : 0) * 0.5, 0, 1);
-      await this.prisma.masteryScore.upsert({
-        where: { learnerId_objectiveId: { learnerId, objectiveId: link.objectiveId } },
-        update: { score: next, attemptsCount: { increment: 1 }, lastPracticedAt: new Date() },
-        create: {
-          learnerId,
-          objectiveId: link.objectiveId,
-          score: next,
-          confidence: 0.2,
-          attemptsCount: 1,
-          lastPracticedAt: new Date(),
-        },
-      });
-      await this.prisma.masteryEvent.create({
-        data: {
-          learnerId,
-          objectiveId: link.objectiveId,
-          eventType: isDiagnostic ? 'DIAGNOSTIC' : 'ATTEMPT',
-          delta: next - prior,
-          sourceAttemptItemId: itemId,
-        },
+  /** Only approved questions from the attempt's subject count, each at most once. */
+  private async grade(
+    tx: Prisma.TransactionClient,
+    attempt: AttemptRow,
+    answers: AnswerInput[],
+  ): Promise<GradedItem[]> {
+    const versions = await tx.questionVersion.findMany({
+      where: {
+        id: { in: answers.map((a) => a.questionVersionId) },
+        question: { subjectId: attempt.subjectId, status: 'APPROVED', deletedAt: null },
+      },
+      select: { id: true, questionId: true, answerKey: true },
+    });
+    const byId = new Map(versions.map((v) => [v.id, v]));
+    const seen = new Set<string>();
+    const rows: Prisma.AttemptItemCreateManyInput[] = [];
+    for (const answer of answers) {
+      const version = byId.get(answer.questionVersionId);
+      if (!version || seen.has(version.questionId)) continue;
+      if (rows.length >= attempt.totalQuestions) break;
+      seen.add(version.questionId);
+      rows.push({
+        attemptId: attempt.id,
+        questionId: version.questionId,
+        questionVersionId: version.id,
+        response: answer.response,
+        isCorrect: version.answerKey === answer.response,
+        answeredAt: new Date(),
       });
     }
+    const items = await tx.attemptItem.createManyAndReturn({
+      data: rows,
+      select: { id: true, questionId: true, isCorrect: true },
+    });
+    return items.map((i) => ({
+      itemId: i.id,
+      questionId: i.questionId,
+      isCorrect: i.isCorrect === true,
+    }));
   }
 
-  async findByIdempotencyKey(key: string) {
-    return this.prisma.attempt.findUnique({ where: { idempotencyKey: key } });
-  }
-
-  async getSubject(subjectId: string) {
-    return this.prisma.subject.findUnique({ where: { id: subjectId } });
+  async findOwnByIdempotencyKey(learnerId: string, key: string) {
+    return this.prisma.attempt.findUnique({ where: { idempotencyKey: scopedKey(learnerId, key) } });
   }
 
   async createOfflineAttempt(input: {
     learnerId: string;
     subjectId: string;
-    mode: 'PRACTICE' | 'DIAGNOSTIC' | 'CBT';
+    mode: AttemptMode;
     idempotencyKey: string;
     totalQuestions: number;
   }) {
-    const subject = await this.prisma.subject.findUnique({ where: { id: input.subjectId } });
-    if (!subject) throw new Error('Subject not found');
+    const subject = await this.requireSubject(input.subjectId);
     return this.prisma.attempt.create({
       data: {
         learnerId: input.learnerId,
         examId: subject.examId,
-        subjectId: input.subjectId,
+        subjectId: subject.id,
         mode: input.mode,
         totalQuestions: input.totalQuestions,
-        idempotencyKey: input.idempotencyKey,
+        idempotencyKey: scopedKey(input.learnerId, input.idempotencyKey),
         syncedFromOffline: true,
       },
     });
@@ -159,35 +173,33 @@ export class AttemptsService {
       where: { id: attemptId },
       include: { items: true },
     });
-    if (!attempt || attempt.learnerId !== learnerId) throw new Error('Attempt not found');
-    const items = await Promise.all(
-      attempt.items.map(async (item) => {
-        const version = await this.prisma.questionVersion.findUnique({
-          where: { id: item.questionVersionId },
-        });
+    if (!attempt || attempt.learnerId !== learnerId)
+      throw new NotFoundException('Attempt not found');
+    if (!attempt.submittedAt) throw new UnprocessableEntityException('Attempt not submitted yet');
+    const versions = await this.prisma.questionVersion.findMany({
+      where: { id: { in: attempt.items.map((i) => i.questionVersionId) } },
+      select: { id: true, answerKey: true, explanation: true, body: true },
+    });
+    const byId = new Map(versions.map((v) => [v.id, v]));
+    const { items, ...summary } = attempt;
+    return {
+      attempt: summary,
+      items: items.map((item) => {
+        const version = byId.get(item.questionVersionId);
         return {
           questionId: item.questionId,
           response: item.response,
           isCorrect: item.isCorrect,
-          answerKey: version?.answerKey,
-          explanation: version?.explanation,
-          body: version?.body,
+          answerKey: version?.answerKey ?? null,
+          explanation: version?.explanation ?? null,
+          body: version?.body ?? null,
         };
       }),
-    );
-    return { attempt, items };
+    };
   }
 }
 
-function shuffle<T>(items: T[]): T[] {
-  const copy = [...items];
-  for (let i = copy.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j]!, copy[i]!];
-  }
-  return copy;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
+/** Client idempotency keys are scoped per learner so they cannot collide across accounts. */
+function scopedKey(learnerId: string, key: string): string {
+  return `offline:${learnerId}:${key}`;
 }

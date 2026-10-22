@@ -27,16 +27,18 @@ export class NotificationsService {
         payload: true,
       },
     });
-    return events.map((e) => ({ ...e, payload: redactPii(e.payload) }));
+    return events.map((e) => ({
+      ...e,
+      payload: redactPii(e.payload),
+      lastError: e.lastError === null ? null : redactPii(e.lastError),
+    }));
   }
 
-  async enqueueEmail(dto: {
-    to: string;
-    subject: string;
-    template: string;
-    data: Record<string, string>;
-  }) {
-    await this.outbox.enqueueEmail(dto.to, dto.subject, dto.template, dto.data, 'admin-manual');
+  async enqueueEmail(
+    dto: { to: string; subject: string; template: string; data: Record<string, string> },
+    adminId: string,
+  ) {
+    await this.outbox.enqueueEmail(dto.to, dto.subject, dto.template, dto.data, adminId);
     return { queued: true };
   }
 }

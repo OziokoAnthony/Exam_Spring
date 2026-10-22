@@ -2,6 +2,7 @@ import { Inject, Injectable, ForbiddenException, NotFoundException } from '@nest
 import type { PrismaClient } from '@examspring/db';
 
 import { PRISMA } from '../database/database.module';
+import { guardianSummary } from './guardian-summary';
 
 @Injectable()
 export class ReportsService {
@@ -41,18 +42,24 @@ export class ReportsService {
     if (cohort.teacherId !== userId && role !== 'ADMIN')
       throw new ForbiddenException('Not your cohort');
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const members = await Promise.all(
-      cohort.members.map(async (m) => {
-        const attempts = await this.prisma.attempt.findMany({
-          where: { learnerId: m.learnerId, submittedAt: { gte: since } },
-          select: { scorePct: true },
-        });
-        const avgScorePct = attempts.length
-          ? attempts.reduce((sum, a) => sum + Number(a.scorePct ?? 0), 0) / attempts.length
-          : 0;
-        return { learnerId: m.learnerId, attemptsCount: attempts.length, avgScorePct };
-      }),
-    );
+    const stats = await this.prisma.attempt.groupBy({
+      by: ['learnerId'],
+      where: {
+        learnerId: { in: cohort.members.map((m) => m.learnerId) },
+        submittedAt: { gte: since },
+      },
+      _avg: { scorePct: true },
+      _count: { _all: true },
+    });
+    const byLearner = new Map(stats.map((s) => [s.learnerId, s]));
+    const members = cohort.members.map((m) => {
+      const s = byLearner.get(m.learnerId);
+      return {
+        learnerId: m.learnerId,
+        attemptsCount: s?._count._all ?? 0,
+        avgScorePct: Number(s?._avg.scorePct ?? 0),
+      };
+    });
     return { cohortId: cohort.id, name: cohort.name, members };
   }
 
@@ -61,11 +68,6 @@ export class ReportsService {
       where: { guardianId, learnerId, status: 'ACTIVE' },
     });
     if (!link && role !== 'ADMIN') throw new ForbiddenException('Not your learner');
-    const mastery = await this.prisma.masteryScore.findMany({ where: { learnerId } });
-    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const last7DaysAnswers = await this.prisma.attemptItem.count({
-      where: { answeredAt: { gte: since }, attempt: { learnerId } },
-    });
-    return { mastery, last7DaysAnswers };
+    return guardianSummary(this.prisma, learnerId);
   }
 }

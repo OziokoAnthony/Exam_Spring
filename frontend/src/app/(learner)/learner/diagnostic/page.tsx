@@ -1,130 +1,115 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useState } from 'react';
 
+import { DashboardShell } from '@/components/DashboardShell';
+import { QuestionCard, toAnswers } from '@/components/QuestionCard';
+import type { ServedQuestion } from '@/components/QuestionCard';
+import { SubjectPicker } from '@/components/SubjectPicker';
+import { Button, Empty, ErrorText, MasteryBar } from '@/components/ui';
 import { api } from '@/lib/api/client';
-import { useAuthStore } from '@/stores/auth';
+import { useMastery } from '@/lib/mastery';
+import { useAction } from '@/lib/use-action';
 
-type Subject = { id: string; name: string };
-type Question = {
-  id: string;
-  versionId: string;
-  body: string;
-  options: { key: string; text: string }[];
-  difficulty: number;
-};
+type Result = { correctCount: number; totalQuestions: number; scorePct: string | number };
+
+function Results({ subjectId, result }: { subjectId: string; result: Result }) {
+  const { strong, weak, rows, error } = useMastery(subjectId);
+  return (
+    <>
+      <h2 className="text-2xl font-semibold">Score: {Math.round(Number(result.scorePct))}%</h2>
+      <p className="text-gray-700">
+        {result.correctCount} of {result.totalQuestions} correct
+      </p>
+      <ErrorText message={error} />
+      <section className="flex flex-col gap-2">
+        <h3 className="font-medium">Strong topics</h3>
+        {strong.length === 0 ? (
+          <Empty>None yet — keep practising.</Empty>
+        ) : (
+          strong.map((r) => <MasteryBar key={r.objectiveId} label={r.label} score={r.score} />)
+        )}
+      </section>
+      <section className="flex flex-col gap-2">
+        <h3 className="font-medium">Topics to work on</h3>
+        {weak.length === 0 ? (
+          <Empty>No weak topics found.</Empty>
+        ) : (
+          weak.map((r) => <MasteryBar key={r.objectiveId} label={r.label} score={r.score} />)
+        )}
+      </section>
+      {rows.length > 0 && (
+        <Link href="/learner/practice" className="rounded bg-black p-3 text-center text-white">
+          Practise your recommended topic next
+        </Link>
+      )}
+    </>
+  );
+}
 
 export default function DiagnosticPage() {
-  const user = useAuthStore((s) => s.user);
-  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [subjectId, setSubjectId] = useState('');
   const [attemptId, setAttemptId] = useState('');
-  const [questions, setQuestions] = useState<Question[]>([]);
+  const [questions, setQuestions] = useState<ServedQuestion[]>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [result, setResult] = useState<{
-    correctCount: number;
-    totalQuestions: number;
-    scorePct: number;
-  } | null>(null);
-  const [error, setError] = useState('');
+  const [result, setResult] = useState<Result | null>(null);
+  const { busy, error, run } = useAction();
 
-  useEffect(() => {
-    api<Subject[]>('/subjects')
-      .then(setSubjects)
-      .catch(() => setError('Could not load subjects'));
-  }, []);
-
-  async function start() {
-    const res = await api<{ attemptId: string; questions: Question[] }>('/attempts/diagnostic', {
-      method: 'POST',
-      body: JSON.stringify({ subjectId }),
+  const start = () =>
+    run(async () => {
+      const res = await api<{ attemptId: string; questions: ServedQuestion[] }>(
+        '/attempts/diagnostic',
+        {
+          method: 'POST',
+          body: { subjectId },
+        },
+      );
+      setAttemptId(res.attemptId);
+      setQuestions(res.questions);
     });
-    setAttemptId(res.attemptId);
-    setQuestions(res.questions);
-  }
 
-  async function submit() {
-    const payload = {
-      answers: questions
-        .filter((q) => answers[q.id])
-        .map((q) => ({ questionVersionId: q.versionId, response: answers[q.id] as string })),
-    };
-    const res = await api<{ correctCount: number; totalQuestions: number; scorePct: number }>(
-      `/attempts/${attemptId}/submit`,
-      {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      },
-    );
-    setResult(res);
-  }
+  const submit = () =>
+    run(async () => {
+      setResult(
+        await api<Result>(`/attempts/${attemptId}/submit`, {
+          method: 'POST',
+          body: { answers: toAnswers(questions, answers) },
+        }),
+      );
+    });
 
-  if (result) {
-    return (
-      <main className="flex min-h-screen flex-col items-center justify-center p-4 text-center">
-        <h1 className="text-2xl font-semibold">
-          Your score: {Math.round(Number(result.scorePct))}%
-        </h1>
-        <p className="mt-2 text-gray-600">
-          {result.correctCount} of {result.totalQuestions} correct
-        </p>
-        <a href="/learner" className="mt-4 text-blue-600">
-          Back to dashboard
-        </a>
-      </main>
-    );
-  }
+  const answered = Object.keys(answers).length;
 
   return (
-    <main className="flex min-h-screen flex-col gap-4 p-4">
-      <h1 className="text-xl font-semibold">Diagnostic</h1>
-      {!user && <p className="text-red-600">Log in first.</p>}
-      {questions.length === 0 && (
-        <div className="flex flex-col gap-3">
-          <select
-            value={subjectId}
-            onChange={(e) => setSubjectId(e.target.value)}
-            className="rounded border p-2"
-          >
-            <option value="">Choose a subject</option>
-            {subjects.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={start}
-            disabled={!subjectId}
-            className="rounded bg-black p-3 text-white disabled:opacity-50"
-          >
-            Start
-          </button>
-        </div>
-      )}
-      {questions.map((q) => (
-        <div key={q.id} className="flex flex-col gap-2 rounded border p-3">
-          <p className="font-medium">{q.body}</p>
-          {q.options.map((o) => (
-            <label key={o.key} className="flex items-center gap-2">
-              <input
-                type="radio"
-                name={q.id}
-                value={o.key}
-                checked={answers[q.id] === o.key}
-                onChange={() => setAnswers({ ...answers, [q.id]: o.key })}
-              />
-              {o.key}. {o.text}
-            </label>
+    <DashboardShell title="Diagnostic">
+      {result ? (
+        <Results subjectId={subjectId} result={result} />
+      ) : questions.length === 0 ? (
+        <>
+          <p>Answer 15 questions so we can find the topics where you are strong and weak.</p>
+          <SubjectPicker value={subjectId} onChange={setSubjectId} />
+          <Button onClick={start} busy={busy} disabled={!subjectId}>
+            Start diagnostic
+          </Button>
+        </>
+      ) : (
+        <>
+          {questions.map((q, i) => (
+            <QuestionCard
+              key={q.id}
+              question={q}
+              number={i + 1}
+              selected={answers[q.id]}
+              onSelect={(key) => setAnswers({ ...answers, [q.id]: key })}
+            />
           ))}
-        </div>
-      ))}
-      {questions.length > 0 && (
-        <button onClick={submit} className="rounded bg-black p-3 text-white">
-          Submit
-        </button>
+          <Button onClick={submit} busy={busy}>
+            Submit ({answered} of {questions.length} answered)
+          </Button>
+        </>
       )}
-      {error && <p className="text-red-600">{error}</p>}
-    </main>
+      <ErrorText message={error} />
+    </DashboardShell>
   );
 }

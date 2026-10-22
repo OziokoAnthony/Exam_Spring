@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { ok } from '../common/envelope';
 import { getAuthUser, JwtAuthGuard } from '../common/jwt-auth.guard';
 import { ZodPipe } from '../common/zod.pipe';
+import { EMAIL_TEMPLATES } from '../mail/templates';
 import { ForbiddenException } from '@nestjs/common';
 
 import { NotificationsService } from './notifications.service';
@@ -12,7 +13,7 @@ import { NotificationsService } from './notifications.service';
 const EmailSchema = z.object({
   to: z.string().email(),
   subject: z.string().min(1).max(200),
-  template: z.string().min(1),
+  template: z.enum(EMAIL_TEMPLATES),
   data: z.record(z.string()).default({}),
 });
 
@@ -33,7 +34,8 @@ export class NotificationsController {
     @Body(new ZodPipe(EmailSchema)) dto: z.infer<typeof EmailSchema>,
     @Req() req: Request,
   ) {
-    if (getAuthUser(req).role !== 'ADMIN') throw new ForbiddenException();
-    return ok(await this.svc.enqueueEmail(dto));
+    const user = getAuthUser(req);
+    if (user.role !== 'ADMIN') throw new ForbiddenException();
+    return ok(await this.svc.enqueueEmail(dto, user.id));
   }
 }
