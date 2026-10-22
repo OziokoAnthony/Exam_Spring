@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react';
 
-import { api } from '@/lib/api/client';
+import { DashboardShell } from '@/components/DashboardShell';
+import { Empty, ErrorText, Loading } from '@/components/ui';
+import { api, errorMessage } from '@/lib/api/client';
 
 type OutboxEvent = {
   id: string;
@@ -15,20 +17,24 @@ type OutboxEvent = {
 };
 
 export default function AdminNotificationsPage() {
-  const [events, setEvents] = useState<OutboxEvent[]>([]);
+  const [events, setEvents] = useState<OutboxEvent[] | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
     api<OutboxEvent[]>('/notifications/outbox')
       .then(setEvents)
-      .catch((e) => setError(e instanceof Error ? e.message : 'Failed'));
+      .catch((e: unknown) => setError(errorMessage(e, 'Could not load the log')));
   }, []);
 
   return (
-    <main className="flex min-h-screen flex-col gap-4 p-4">
-      <h1 className="text-xl font-semibold">Notification delivery log</h1>
-      {error && <p className="text-red-600">{error}</p>}
-      {events.map((e) => (
+    <DashboardShell title="Email delivery">
+      <p className="text-sm text-gray-700">
+        Last 50 emails. Recipients are hidden. Failed emails retry up to 5 times, then move to DLQ.
+      </p>
+      <ErrorText message={error} />
+      {events === null && !error && <Loading />}
+      {events?.length === 0 && <Empty>No emails yet.</Empty>}
+      {events?.map((e) => (
         <div key={e.id} className="rounded border p-3 text-sm">
           <p>
             <span className="font-medium">{e.eventType}</span> · {e.status} · attempts {e.attempts}
@@ -40,6 +46,6 @@ export default function AdminNotificationsPage() {
           {e.lastError && <p className="text-red-600">{e.lastError}</p>}
         </div>
       ))}
-    </main>
+    </DashboardShell>
   );
 }

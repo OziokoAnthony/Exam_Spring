@@ -1,33 +1,38 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { pendingCount, syncOfflineAttempts } from '@/lib/offline/sync';
 
-export default function SyncBadge() {
+/** "3 attempts pending" — SKILL.md 2.10. Syncs on load and whenever the device reconnects. */
+export function SyncBadge() {
   const [count, setCount] = useState(0);
   const [message, setMessage] = useState('');
 
-  useEffect(() => {
-    pendingCount()
-      .then(setCount)
-      .catch(() => undefined);
-    const onOnline = () => {
-      syncOfflineAttempts()
-        .then((r) => {
-          setMessage(`Synced ${r.synced}, ${r.remaining} pending`);
-          return pendingCount();
-        })
-        .then(setCount)
-        .catch(() => setMessage('Sync failed'));
-    };
-    window.addEventListener('online', onOnline);
-    return () => window.removeEventListener('online', onOnline);
+  const sync = useCallback(async () => {
+    try {
+      if ((await pendingCount()) > 0 && navigator.onLine) {
+        const r = await syncOfflineAttempts();
+        setMessage(r.synced > 0 ? `Synced ${r.synced}` : '');
+      }
+    } catch {
+      setMessage('Sync will retry when you are back online');
+    } finally {
+      setCount(await pendingCount().catch(() => 0));
+    }
   }, []);
 
+  useEffect(() => {
+    void sync();
+    window.addEventListener('online', sync);
+    return () => window.removeEventListener('online', sync);
+  }, [sync]);
+
+  if (count === 0 && !message) return null;
   return (
-    <p className="text-sm text-gray-500">
-      Offline queue: {count} attempt{count === 1 ? '' : 's'} pending {message && `· ${message}`}
+    <p role="status" className="rounded bg-amber-50 p-2 text-sm text-amber-900">
+      {count > 0 ? `${count} attempt${count === 1 ? '' : 's'} pending sync` : ''}
+      {message && ` ${message}`}
     </p>
   );
 }

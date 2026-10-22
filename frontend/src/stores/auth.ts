@@ -2,25 +2,26 @@
 
 import { create } from 'zustand';
 
-type Role = 'LEARNER' | 'PARENT' | 'TEACHER' | 'ADMIN';
+import type { SessionUser } from '@/lib/api/client';
 
-type User = {
-  id: string;
-  email: string;
-  role: Role;
-  fullName: string;
-  isMinor: boolean;
-  emailVerified: boolean;
-};
+export type Role = SessionUser['role'];
 
 type AuthState = {
-  user: User | null;
-  setUser: (user: User | null) => void;
+  user: SessionUser | null;
+  /** True once a session restore has been attempted on this page load. */
+  checked: boolean;
+  setUser: (user: SessionUser | null) => void;
   logout: () => void;
 };
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
-  setUser: (user) => set({ user }),
-  logout: () => set({ user: null }),
+  checked: false,
+  setUser: (user) => set({ user, checked: true }),
+  logout: () => set({ user: null, checked: true }),
 }));
+
+export function homeFor(user: SessionUser): string {
+  if (user.status === 'PENDING_GUARDIAN_CONSENT') return '/consent/pending';
+  return `/${user.role.toLowerCase()}`;
+}
