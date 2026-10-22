@@ -8,6 +8,8 @@ const EnvSchema = z.object({
   JWT_ACCESS_SECRET: z.string().min(16),
   JWT_REFRESH_SECRET: z.string().min(16),
   WEB_ORIGIN: z.string().url().default('http://localhost:3000'),
+  // Behind the web app's /api proxy in production this is /api/v1/auth.
+  REFRESH_COOKIE_PATH: z.string().startsWith('/').default('/v1/auth'),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

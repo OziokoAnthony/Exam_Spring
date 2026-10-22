@@ -20,6 +20,7 @@ import {
 } from '@examspring/shared';
 
 import { ok } from '../common/envelope';
+import { loadEnv } from '../config/env';
 import { RateLimit } from '../common/rate-limit.guard';
 import { ZodPipe } from '../common/zod.pipe';
 import { AuthService } from './auth.service';
@@ -32,7 +33,7 @@ function setRefreshCookie(res: Response, token: string): void {
     sameSite: 'strict',
     secure: process.env.NODE_ENV === 'production',
     maxAge: 30 * 24 * 60 * 60 * 1000,
-    path: '/v1/auth',
+    path: loadEnv().REFRESH_COOKIE_PATH,
   });
 }
 
@@ -94,7 +95,7 @@ export class AuthController {
   ) {
     const token = readRefreshToken(req, body);
     if (token) await this.auth.logout(token);
-    res.clearCookie(REFRESH_COOKIE, { path: '/v1/auth' });
+    res.clearCookie(REFRESH_COOKIE, { path: loadEnv().REFRESH_COOKIE_PATH });
     return ok({ loggedOut: true });
   }
 

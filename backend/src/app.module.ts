@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
 import type { MiddlewareConsumer, NestModule } from '@nestjs/common';
-import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 
+import { IdempotencyInterceptor } from './common/idempotency.interceptor';
 import { RateLimitGuard } from './common/rate-limit.guard';
 import { RequestContextMiddleware } from './common/request-context';
 import { GlobalExceptionFilter } from './common/http-exception.filter';
@@ -42,6 +43,7 @@ import { NotificationsModule } from './notifications/notifications.module';
   providers: [
     { provide: APP_GUARD, useClass: RateLimitGuard },
     { provide: APP_FILTER, useClass: GlobalExceptionFilter },
+    { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
   ],
 })
 export class AppModule implements NestModule {
